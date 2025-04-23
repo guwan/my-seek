@@ -1,4 +1,4 @@
-package top.knos.MySeek;
+package top.knos.mySeek;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
