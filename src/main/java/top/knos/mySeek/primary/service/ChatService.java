@@ -3,6 +3,7 @@ package top.knos.mySeek.primary.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,7 +86,7 @@ public class ChatService {
         return response
                 .doOnNext(sb::append)
                 .doOnComplete(() -> {
-                    log.info("流式聊天：{}", sb);
+                    redisChatMemory.add(sessionId, new AssistantMessage(sb.toString()));
                 });
     }
 }

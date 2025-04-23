@@ -23,6 +23,9 @@ public class RedisChatMemory implements ChatMemory {
         this.ttl = 24*60*60*1000;
     }
 
+    public void add(String conversationId, Message message) {
+        add(conversationId,List.of(message));
+    }
     @Override
     public void add(String conversationId, List<Message> messages) {
 
