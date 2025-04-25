@@ -20,8 +20,8 @@ public class CaptchaController {
      * 获取验证码。
      */
     @GetMapping("/captcha/base64")
-    public CaptchaVo captcha(@RequestParam(required=false) String sessionId) throws Exception {
-        return captchaService.getCaptcha(sessionId);
+    public CaptchaVo captcha(@RequestParam(required=false) String captchaKey) throws Exception {
+        return captchaService.getCaptcha(captchaKey);
     }
     /**
      * 获取空白验证码，用于占位

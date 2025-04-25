@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: MySeek
+  profiles:
+    default: dev
+
+  #jackson相关配置
+  jackson:
+    default-property-inclusion: ALWAYS
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+  cache:
+    type: redis
+
+
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        model: deepseek-r1:1.5b
+
+captcha:
+  key: "captcha_"
+  timeout: 60
+
+security:
+  jwt:
+    token:
+      secret-key: 5c2f3214-bd8a-4e33-b217-67af297f5ba7
+      expire-length: 86400000 # 默认一天内有效: 24 hour*60 minutes * 60 seconds * 1000 miliseconds
+
+mail:
+  send:
+    host: smtp.qq.com
+    mail: xxxx@qq.com
+    token: xxxx
+    register:
+      host: http://localhost:8080
