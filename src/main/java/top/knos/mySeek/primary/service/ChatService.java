@@ -29,7 +29,7 @@ public class ChatService {
     private RedisChatMemory redisChatMemory;
 
     public String chat(ChatRequest request) {
-        String sessionId = request.getSessionId();
+        String conversationId = request.getConversationId();
         String userInput = request.getMessage();
 
         // 获取历史消息
@@ -37,13 +37,13 @@ public class ChatService {
 
         // 添加用户新消息
         UserMessage userMessage = new UserMessage(userInput);
-        redisChatMemory.add(sessionId, userMessage);
+        redisChatMemory.add(conversationId, userMessage);
 
         // 将历史消息和新消息一起发送给AI
         // 调用 AI
         var response = chatClient.prompt()
                 .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, sessionId)
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 50))
                 .user(userMessage.getText())
                 .call();
@@ -53,31 +53,30 @@ public class ChatService {
         String aiReply = response.content();
 
         // 存储 AI 回复
-        redisChatMemory.add(sessionId, List.of(new AssistantMessage(aiReply)));
+        redisChatMemory.add(conversationId, List.of(new AssistantMessage(aiReply)));
         return aiReply;
     }
 
     public Flux<String> chatStream(ChatRequest request) {
-        String sessionId = request.getSessionId();
+        String conversationId = request.getConversationId();
         String userInput = request.getMessage();
 
         // 获取历史消息
-        List<Message> history = redisChatMemory.get(sessionId, 20);
+        List<Message> history = redisChatMemory.get(conversationId, 20);
 
         // 添加用户新消息
         UserMessage userMessage = new UserMessage(userInput);
-        redisChatMemory.add(sessionId, userMessage);
+        redisChatMemory.add(conversationId, userMessage);
 
         // 将历史消息和新消息一起发送给AI
         // 调用 AI
         var response = chatClient.prompt()
                 .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, sessionId)
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 50))
                 .user(userMessage.getText())
                 .stream()
                 .content();
-
 
         // 保存AI回复到历史记录
         StringBuilder sb = new StringBuilder();
@@ -86,7 +85,8 @@ public class ChatService {
         return response
                 .doOnNext(sb::append)
                 .doOnComplete(() -> {
-                    redisChatMemory.add(sessionId, new AssistantMessage(sb.toString()));
+                    log.info(sb.toString());
+                    redisChatMemory.add(conversationId, new AssistantMessage(sb.toString()));
                 });
     }
 }

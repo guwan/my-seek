@@ -10,7 +10,7 @@ spring:
         model: deepseek-r1:1.5b
 
   datasource:
-    url: jdbc:mariadb://localhost:3306/dap?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mariadb://localhost:3306/seek?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
     username: root
     password: a1111a
     driver-class-name: org.mariadb.jdbc.Driver

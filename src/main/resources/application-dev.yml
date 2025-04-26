@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mariadb://localhost:3306/dap?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mariadb://localhost:3306/seek?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
     username: root
     password: a1111a
     driver-class-name: org.mariadb.jdbc.Driver
@@ -29,7 +29,8 @@ spring:
     redis:
       database: 2
       password: '!@#Pwdadc2'
-      host: 192.168.0.73
+      #host: 192.168.0.73
+      host: localhost
       port: 6379
       # 连接超时时间（毫秒） 去链接redis服务端
       timeout: 6000
