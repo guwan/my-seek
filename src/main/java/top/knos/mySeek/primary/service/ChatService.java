@@ -8,10 +8,12 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import top.knos.mySeek.common.Result;
 import top.knos.mySeek.primary.vo.ChatRequest;
 
 
 import reactor.core.publisher.Flux;
+import top.knos.mySeek.support.vo.ChatInfoVo;
 
 import java.util.List;
 
@@ -88,5 +90,11 @@ public class ChatService {
                     log.info(sb.toString());
                     redisChatMemory.add(conversationId, new AssistantMessage(sb.toString()));
                 });
+    }
+
+    public Result<ChatInfoVo> chatInfo(String conversationId) {
+        redisChatMemory.get(conversationId, 1);
+        redis
+        return null;
     }
 }

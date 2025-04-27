@@ -6,6 +6,7 @@ import reactor.core.publisher.Flux;
 import top.knos.mySeek.common.Result;
 import top.knos.mySeek.primary.vo.ChatRequest;
 import top.knos.mySeek.primary.service.ChatService;
+import top.knos.mySeek.support.vo.ChatInfoVo;
 
 @RestController
 @RequestMapping("api/ai")
@@ -23,6 +24,10 @@ public class ChatController {
     @PostMapping("chat/stream")
     public Flux<String> generateStream(@RequestBody ChatRequest chatRequest) {
         return chatService.chatStream(chatRequest);
+    }
+    @GetMapping("chat/info/")
+    public Result<ChatInfoVo> generateStreamRes(@PathVariable String conversationId) {
+        return chatService.chatInfo(conversationId);
     }
 
 }

@@ -53,6 +53,15 @@ public class RedisChatMemory implements ChatMemory {
         }
         return range.stream().map(MessageVo::to).toList();
     }
+    public Message getFirstOne(String conversationId) {
+        String key = PREFIX + conversationId;
+        List<MessageVo> range = redisTemplate.opsForList().range(key, 0, 0);
+        if(range==null||range.isEmpty()){
+            return null;
+        }
+        MessageVo vo = range.get(0);
+        return vo.to();
+    }
 
     @Override
     public void clear(String conversationId) {

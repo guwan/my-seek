@@ -27,10 +27,10 @@ spring:
 
   data:
     redis:
-      database: 2
+      database: 5
       password: '!@#Pwdadc2'
-      #host: 192.168.0.73
-      host: localhost
+      host: 192.168.0.73
+      #host: localhost
       port: 6379
       # 连接超时时间（毫秒） 去链接redis服务端
       timeout: 6000
