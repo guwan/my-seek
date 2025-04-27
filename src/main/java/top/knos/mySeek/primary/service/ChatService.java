@@ -1,6 +1,7 @@
 package top.knos.mySeek.primary.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -92,9 +93,13 @@ public class ChatService {
                 });
     }
 
-    public Result<ChatInfoVo> chatInfo(String conversationId) {
-        redisChatMemory.get(conversationId, 1);
-        redis
-        return null;
+    public ChatInfoVo chatInfo(String conversationId) {
+        Message message = redisChatMemory.getFirstOne(conversationId);
+        String text = message.getText();
+        String title= text != null ? text.substring(0, Math.min(100, text.length())) : "";
+        ChatInfoVo vo = new ChatInfoVo();
+        vo.setTitle(title);
+        vo.setId(conversationId);
+        return vo;
     }
 }

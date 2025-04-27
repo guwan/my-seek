@@ -3,12 +3,14 @@ package top.knos.mySeek.primary.vo;
 import lombok.Data;
 import org.springframework.ai.chat.messages.*;
 
+import java.util.Date;
 import java.util.Map;
 
 @Data
 public class MessageVo {
     private String text;
     private String type;
+    private Date createAt;
 
     public static MessageVo of(Message message) {
         MessageVo vo = new MessageVo();

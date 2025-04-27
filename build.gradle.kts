@@ -48,8 +48,9 @@ dependencies {
 
 	//验证码
 	implementation("io.github.guwan:lead-captcha:0.0.2")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
 
-	compileOnly("org.projectlombok:lombok")
+    compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	//runtimeOnly("com.mysql:mysql-connector-j")
 	runtimeOnly("org.mariadb.jdbc:mariadb-java-client")

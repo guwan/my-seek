@@ -25,9 +25,9 @@ public class ChatController {
     public Flux<String> generateStream(@RequestBody ChatRequest chatRequest) {
         return chatService.chatStream(chatRequest);
     }
-    @GetMapping("chat/info/")
-    public Result<ChatInfoVo> generateStreamRes(@PathVariable String conversationId) {
-        return chatService.chatInfo(conversationId);
+    @GetMapping("chat/info")
+    public Result<ChatInfoVo> generateStreamRes(@RequestParam String conversationId) {
+        return Result.ok(chatService.chatInfo(conversationId));
     }
 
 }
