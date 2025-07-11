@@ -16,7 +16,9 @@ public class BeanConfig {
     public ChatClient chatClient(OllamaChatModel chatModel, RedisChatMemory redisChatMemory) {
         return ChatClient
                 .builder(chatModel)
-                .defaultAdvisors(new MessageChatMemoryAdvisor(redisChatMemory))
+                .defaultAdvisors(MessageChatMemoryAdvisor
+                        .builder(redisChatMemory)
+                        .build())
                 .build();
     }
 

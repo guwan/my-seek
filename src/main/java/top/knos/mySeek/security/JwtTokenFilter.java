@@ -9,21 +9,20 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
-import top.knos.mySeek.config.SecurityConfig;
 import top.knos.mySeek.exception.TipsException;
 import top.knos.mySeek.security.service.RbacAuthorityService;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
+
+import static top.knos.mySeek.config.SecurityConfig.PUBLIC;
 
 // We should use OncePerRequestFilter since we are doing a database call, there is no point in doing this more than once
 public class JwtTokenFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
-    private final List<AntPathRequestMatcher> antPathRequestMatchers;
 
     private final RbacAuthorityService rbacAuthorityService;
 
@@ -33,11 +32,6 @@ public class JwtTokenFilter extends OncePerRequestFilter {
         this.jwtTokenProvider = jwtTokenProvider;
         this.rbacAuthorityService = rbacAuthorityService;
 
-        // 定义需要排除的URL
-        antPathRequestMatchers = new ArrayList<>();
-        for (String excludedUrl : SecurityConfig.PUBLIC) {
-            antPathRequestMatchers.add(new AntPathRequestMatcher(excludedUrl));
-        }
     }
 
 
@@ -52,7 +46,7 @@ public class JwtTokenFilter extends OncePerRequestFilter {
 
         String token = jwtTokenProvider.resolveToken(request);
         try {
-            if(token == null){
+            if (token == null) {
                 SecurityContextHolder.clearContext();
                 response.sendError(HttpStatus.UNAUTHORIZED.value(), "未登录");
                 return;
@@ -76,9 +70,12 @@ public class JwtTokenFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
-
+    AntPathMatcher antPathMatcher = new AntPathMatcher();
     public boolean needTokenMatches(HttpServletRequest request) {
         // 判断请求是否匹配
-        return antPathRequestMatchers.stream().noneMatch(matcher -> matcher.matches(request));
+        return Arrays.stream(PUBLIC)
+                .noneMatch(matcher ->
+                        antPathMatcher.match(matcher,request.getRequestURI())
+                );
     }
 }

@@ -3,6 +3,7 @@ package top.knos.mySeek.primary.service;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -18,8 +19,6 @@ import top.knos.mySeek.support.vo.ChatInfoVo;
 
 import java.util.List;
 
-import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
-import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY;
 
 @Service
 @Slf4j
@@ -44,12 +43,24 @@ public class ChatService {
 
         // 将历史消息和新消息一起发送给AI
         // 调用 AI
-        var response = chatClient.prompt()
-                .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 50))
+        var response = chatClient
+                .prompt()
+                .advisors(advisorSpec -> {
+                    MessageChatMemoryAdvisor advisor = MessageChatMemoryAdvisor
+                            .builder(redisChatMemory)
+                            .conversationId(conversationId)
+                            .order(50)
+                            .build();
+                    advisorSpec.advisors(advisor);
+                })
                 .user(userMessage.getText())
                 .call();
+//        var response = chatClient.prompt()
+//                .advisors(a -> a
+//                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
+//                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 50))
+//                .user(userMessage.getText())
+//                .call();
 
 
         // 保存AI回复到历史记录
@@ -65,7 +76,7 @@ public class ChatService {
         String userInput = request.getMessage();
 
         // 获取历史消息
-        List<Message> history = redisChatMemory.get(conversationId, 20);
+        List<Message> history = redisChatMemory.get(conversationId);
 
         // 添加用户新消息
         UserMessage userMessage = new UserMessage(userInput);
@@ -73,13 +84,26 @@ public class ChatService {
 
         // 将历史消息和新消息一起发送给AI
         // 调用 AI
-        var response = chatClient.prompt()
-                .advisors(a -> a
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 50))
+        var response = chatClient
+                .prompt()
+                .advisors(advisorSpec -> {
+                    MessageChatMemoryAdvisor advisor = MessageChatMemoryAdvisor
+                            .builder(redisChatMemory)
+                            .conversationId(conversationId)
+                            .order(50)
+                            .build();
+                    advisorSpec.advisors(advisor);
+                })
                 .user(userMessage.getText())
                 .stream()
                 .content();
+//        var response = chatClient.prompt()
+//                .advisors(a -> a
+//                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId)
+//                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 50))
+//                .user(userMessage.getText())
+//                .stream()
+//                .content();
 
         // 保存AI回复到历史记录
         StringBuilder sb = new StringBuilder();
@@ -96,7 +120,7 @@ public class ChatService {
     public ChatInfoVo chatInfo(String conversationId) {
         Message message = redisChatMemory.getFirstOne(conversationId);
         String text = message.getText();
-        String title= text != null ? text.substring(0, Math.min(100, text.length())) : "";
+        String title = text != null ? text.substring(0, Math.min(100, text.length())) : "";
         ChatInfoVo vo = new ChatInfoVo();
         vo.setTitle(title);
         vo.setId(conversationId);

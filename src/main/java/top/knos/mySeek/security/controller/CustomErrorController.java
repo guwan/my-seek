@@ -32,6 +32,7 @@ public class CustomErrorController implements ErrorController {
     Result<Object> error(HttpServletRequest request, HttpServletResponse response) {
         // Appropriate HTTP response code (e.g. 404 or 500) is automatically set by Spring.
         // Here we just define response body.
+        //response.setContentType("application/json");
         Map<String, Object> errorMap = getErrorAttributes(request);
         //定义返回格式
         Result<Object> result = new Result<>();

@@ -1,6 +1,7 @@
 package top.knos.mySeek.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -75,6 +76,18 @@ public class JsonUtils {
 		}
     	
     	return null;
+    }
+
+    /**
+     * 对不合法的json转义
+     * @param input
+     * @return
+     */
+    public static String escapeJsonWithJackson(String input) {
+        JsonStringEncoder encoder = JsonStringEncoder.getInstance();
+        StringBuilder escaped = new StringBuilder();
+        encoder.quoteAsString(input, escaped);
+        return escaped.toString();
     }
     
 }

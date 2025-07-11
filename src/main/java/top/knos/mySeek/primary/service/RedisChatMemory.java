@@ -42,10 +42,10 @@ public class RedisChatMemory implements ChatMemory {
     }
 
     @Override
-    public List<Message> get(String conversationId, int lastN) {
+    public List<Message> get(String conversationId) {
         String key = PREFIX + conversationId;
         Long size = redisTemplate.opsForList().size(key);
-        long start = Math.max(0, size - lastN);
+        long start = Math.max(0, size - 50);
         long end = size - 1;
         List<MessageVo> range = redisTemplate.opsForList().range(key, start, end);
         if(range==null||range.isEmpty()){
