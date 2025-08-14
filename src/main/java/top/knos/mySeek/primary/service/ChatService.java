@@ -1,20 +1,18 @@
 package top.knos.mySeek.primary.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import top.knos.mySeek.common.Result;
 import top.knos.mySeek.primary.vo.ChatRequest;
 
 
 import reactor.core.publisher.Flux;
+import top.knos.mySeek.primary.vo.MessageVo;
 import top.knos.mySeek.support.vo.ChatInfoVo;
 
 import java.util.List;
@@ -75,6 +73,9 @@ public class ChatService {
         String conversationId = request.getConversationId();
         String userInput = request.getMessage();
 
+        boolean newChat = !redisChatMemory.chatExist(conversationId);
+
+
         // 获取历史消息
         List<Message> history = redisChatMemory.get(conversationId);
 
@@ -114,16 +115,31 @@ public class ChatService {
                 .doOnComplete(() -> {
                     log.info(sb.toString());
                     redisChatMemory.add(conversationId, new AssistantMessage(sb.toString()));
+                    if (newChat) {
+                        String title = userInput != null ? userInput.substring(0, Math.min(100, userInput.length())) : "";
+                        ChatInfoVo chatInfoVo = new ChatInfoVo();
+                        chatInfoVo.setTitle(title);
+                        chatInfoVo.setId(conversationId);
+                    }
                 });
     }
 
     public ChatInfoVo chatInfo(String conversationId) {
-        Message message = redisChatMemory.getFirstOne(conversationId);
+        MessageVo message = redisChatMemory.getFirstOneVo(conversationId);
         String text = message.getText();
         String title = text != null ? text.substring(0, Math.min(100, text.length())) : "";
         ChatInfoVo vo = new ChatInfoVo();
         vo.setTitle(title);
         vo.setId(conversationId);
         return vo;
+    }
+
+    public List<MessageVo> history(String conversationId) {
+        return redisChatMemory.getVo(conversationId, 20);
+    }
+
+    public List<ChatInfoVo> chatItemList() {
+
+        return null;
     }
 }

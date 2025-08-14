@@ -16,6 +16,7 @@ public class MessageVo {
         MessageVo vo = new MessageVo();
         vo.text = message.getText();
         vo.type = message.getMessageType().getValue();
+        vo.setCreateAt(new Date());
         return vo;
     }
     public Message to() {
