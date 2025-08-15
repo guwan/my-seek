@@ -31,3 +31,10 @@
 
 1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
 
+
+在 PowerShell 中执行 ，可以生成空白章节文件
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\git\my-seek\sh\create_chapters.ps1
+
+```
