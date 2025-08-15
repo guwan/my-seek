@@ -11,6 +11,7 @@ import top.knos.mySeek.primary.vo.NovelOutline;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 
 @Service
@@ -33,6 +34,7 @@ public class NovelStorageService {
         log.debug("读取历史文件概要文件：{}",fileName);
         String content = readFile(fileName);
         if(StringUtils.isEmpty(content)){
+            log.debug("不存在历史文件概要文件");
             return null;
         }
         return objectMapper.readValue(content, NovelOutline.class);
@@ -68,6 +70,8 @@ public class NovelStorageService {
         try {
             Path fullPath = BASE_PATH.resolve(relativePath);
             return Files.readString(fullPath, StandardCharsets.UTF_8);
+        } catch (NoSuchFileException e) {
+            return null;
         } catch (IOException e) {
             throw new RuntimeException("读取文件失败", e);
         }
