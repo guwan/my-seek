@@ -4,39 +4,95 @@ spring:
   profiles:
     default: dev
 
+  # Java 21+ 虚拟线程：显著提升 IO 密集型接口的并发能力
+  threads:
+    virtual:
+      enabled: true
+
+  # 说明：当前业务中存在较多对关联集合（如 authorities/resources/parent）的延迟加载访问，
+  # 关闭 open-in-view 会触发 LazyInitializationException，因此这里保持开启。
+  # 后续可通过 @EntityGraph / fetch join 逐步收敛后再关闭。
+  jpa:
+    open-in-view: true
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+        format_sql: false
+
   #jackson相关配置
   jackson:
     default-property-inclusion: ALWAYS
     time-zone: GMT+8
     date-format: yyyy-MM-dd HH:mm:ss
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 20MB
+      max-file-size: 50MB
+      max-request-size: 50MB
   cache:
     type: redis
 
-
   ai:
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
-        model: deepseek-r1:8b
+        model: ${OLLAMA_CHAT_MODEL:deepseek-r1:8b}
+    # 向量存储配置（使用 Redis）
+    vectorstore:
+      redis:
+        index-name: knowledge-base
+        prefix: "doc:"
+        initialize-schema: true
+
+# 豆包（字节跳动）配置
+doubao:
+  api-key: ${DOUBAO_API_KEY:}
+  base-url: ${DOUBAO_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
+
+# 千问（阿里云）配置
+qwen:
+  api-key: ${QWEN_API_KEY:}
+  base-url: ${QWEN_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+
+# 文件上传配置
+file:
+  upload:
+    path: ${FILE_UPLOAD_PATH:uploads/documents/}
+    max-size: 50MB
 
 captcha:
-  key: "captcha_"
-  timeout: 60
+  key: ${CAPTCHA_KEY:captcha_}
+  timeout: ${CAPTCHA_TIMEOUT:60}
 
 security:
   jwt:
     token:
-      secret-key: 5c2f3214-bd8a-4e33-b217-67af297f5ba7
+      # 生产环境必须通过 JWT_SECRET_KEY 环境变量注入（至少 32 字符）
+      secret-key: ${JWT_SECRET_KEY:}
       expire-length: 86400000 # 默认一天内有效: 24 hour*60 minutes * 60 seconds * 1000 miliseconds
 
 mail:
   send:
-    host: smtp.qq.com
-    mail: xxxx@qq.com
-    token: xxxx
+    host: ${MAIL_HOST:}
+    mail: ${MAIL_ACCOUNT:}
+    token: ${MAIL_TOKEN:}
     register:
-      host: http://localhost:8080
+      host: ${REGISTER_HOST:http://localhost:8080}
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true

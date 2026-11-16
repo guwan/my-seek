@@ -4,6 +4,7 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 
 import java.util.Collection;
+import java.util.Collections;
 
 /**
  * @Author : KingFish
@@ -23,7 +24,7 @@ public class AuthToken extends AbstractAuthenticationToken {
      *
      */
     public AuthToken(Object principal, Object credentials) {
-        super(null);
+        super(Collections.emptyList());
         this.principal = principal;
         this.credentials = credentials;
         setAuthenticated(false);

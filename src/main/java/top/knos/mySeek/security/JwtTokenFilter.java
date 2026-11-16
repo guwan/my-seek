@@ -7,14 +7,17 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 import top.knos.mySeek.exception.TipsException;
 import top.knos.mySeek.security.service.RbacAuthorityService;
+import top.knos.mySeek.utils.JsonUtils;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import static top.knos.mySeek.config.SecurityConfig.PUBLIC;
@@ -48,7 +51,7 @@ public class JwtTokenFilter extends OncePerRequestFilter {
         try {
             if (token == null) {
                 SecurityContextHolder.clearContext();
-                response.sendError(HttpStatus.UNAUTHORIZED.value(), "未登录");
+                writeError(response, HttpStatus.UNAUTHORIZED.value(), "未登录或登录已过期");
                 return;
             }
             if (jwtTokenProvider.validateToken(token)) {
@@ -59,18 +62,31 @@ public class JwtTokenFilter extends OncePerRequestFilter {
         } catch (JwtException ex) {
             //this is very important, since it guarantees the user is not authenticated at all
             SecurityContextHolder.clearContext();
-            response.sendError(HttpStatus.UNAUTHORIZED.value(), ex.getMessage());
+            writeError(response, HttpStatus.UNAUTHORIZED.value(), ex.getMessage());
             return;
         } catch (TipsException ex) {
             //this is very important, since it guarantees the user is not authenticated at all
             SecurityContextHolder.clearContext();
-            response.sendError(ex.getCode(), ex.getMessage());
+            writeError(response, ex.getCode(), ex.getMessage());
             return;
         }
 
         filterChain.doFilter(request, response);
     }
-    AntPathMatcher antPathMatcher = new AntPathMatcher();
+
+    /**
+     * 以统一 JSON 结构返回错误，保证前端能按 code 判断未登录等场景。
+     */
+    private void writeError(HttpServletResponse response, int code, String msg) throws IOException {
+        response.setStatus(code);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.getWriter().write(JsonUtils.objectToJson(
+                top.knos.mySeek.common.Result.fail(code, msg == null ? "请求失败" : msg)));
+    }
+
+    private final AntPathMatcher antPathMatcher = new AntPathMatcher();
+
     public boolean needTokenMatches(HttpServletRequest request) {
         // 判断请求是否匹配
         return Arrays.stream(PUBLIC)

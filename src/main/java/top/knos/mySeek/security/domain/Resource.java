@@ -10,6 +10,11 @@ import java.util.Objects;
  * @date 2018/11/16 13:23
  */
 @Entity(name = "sso_resource")
+@Table(indexes = {
+        @Index(name = "idx_sso_resource_path", columnList = "path"),
+        @Index(name = "idx_sso_resource_parent_id", columnList = "parent_id"),
+        @Index(name = "idx_sso_resource_type", columnList = "type")
+})
 public class Resource implements Serializable {
 
     @Id

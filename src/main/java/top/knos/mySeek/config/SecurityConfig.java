@@ -18,6 +18,16 @@ import top.knos.mySeek.security.service.RbacAuthorityService;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    /**
+     * 免鉴权路径。
+     * <p>注意：/api/ai/** 与 /api/dev/** 均已改为需要登录，避免匿名用户占用模型资源、
+     * 读取他人会话以及调用开发工具接口。</p>
+     */
+    public static final String[] PUBLIC = new String[]{
+            "/api/auth/**",
+            "/api/open/**",
+    };
+
     private final JwtTokenProvider jwtTokenProvider;
     private final RbacAuthorityService rbacAuthorityService;
 
@@ -25,15 +35,6 @@ public class SecurityConfig {
         this.jwtTokenProvider = jwtTokenProvider;
         this.rbacAuthorityService = rbacAuthorityService;
     }
-
-    public static final String[] PUBLIC = new String[]{
-            "/api/dev/autoGenerateMenu",
-            "/api/auth/**",
-            "/api/open/**",
-            "/api/call/event",
-            "/api/fee/event",
-            "/api/ai/**",
-    };
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -51,7 +52,10 @@ public class SecurityConfig {
                 (authorizeHttpRequests) ->
                         authorizeHttpRequests
                                 .requestMatchers("/static/**").permitAll()
+                                .requestMatchers("/error").permitAll()
+                                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                                 .requestMatchers(PUBLIC).permitAll()
+                                .requestMatchers("/actuator/**").authenticated()
                                 .requestMatchers("/api/**").authenticated()
                                 .anyRequest().permitAll());
 

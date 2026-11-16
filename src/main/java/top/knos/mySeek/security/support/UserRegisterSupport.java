@@ -1,10 +1,6 @@
 package top.knos.mySeek.security.support;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,27 +13,29 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 @Service
 @Slf4j
 public class UserRegisterSupport {
     private static final String format = "_register_token_";
-    private static final String randomKey = "sadfasfasf!35asd";
     private static final long validTime = 10 * 60 * 1000;//10分钟失效
 
     @Value("${mail.send.register.host}")
     private String REGISTER_HOST;
-    @Autowired
-    private MailService mailService;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-    @Autowired
-    private UserRepository userRepository;
+    @Value("${security.jwt.token.secret-key:}")
+    private String randomKey;
+    private final MailService mailService;
+    private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
 
-    EncryptUtil encryptUtil = EncryptUtil.getInstance();
-    DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private final EncryptUtil encryptUtil = EncryptUtil.getInstance();
+
+    public UserRegisterSupport(MailService mailService, PasswordEncoder passwordEncoder, UserRepository userRepository) {
+        this.mailService = mailService;
+        this.passwordEncoder = passwordEncoder;
+        this.userRepository = userRepository;
+    }
 
     public String getToken(String recipient) throws UnsupportedEncodingException {
         String token = recipient + format + new Date().getTime();
@@ -73,7 +71,7 @@ public class UserRegisterSupport {
             String mailContent = content.replaceAll(siteStr, REGISTER_HOST).replaceAll(tokenStr, getToken(recipient));
             mailService.send(recipient, mailContent, "账号激活邮件");
         } catch (Exception e) {
-            log.error("发送邮件失败：\n{}", ExceptionUtils.getThrowableCount(e));
+            log.error("发送邮件失败", e);
             throw new TipsException("发送邮件失败");
         }
         return true;
@@ -84,7 +82,7 @@ public class UserRegisterSupport {
         try {
             mailService.send(recipient, content, "账号激活邮件");
         } catch (Exception e) {
-            log.error("发送邮件错误：\n{}", ExceptionUtils.getThrowableCount(e));
+            log.error("发送邮件错误", e);
             return false;
         }
         return true;

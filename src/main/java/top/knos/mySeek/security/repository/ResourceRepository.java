@@ -29,7 +29,7 @@ import java.util.List;
 public interface ResourceRepository extends JpaRepository<Resource, Integer> {
 
 
-    @Query("select count(id) from sso_resource where id in (:ids)")
+    @Query("select count(r.id) from sso_resource r where r.id in (:ids)")
     long countByIds(@Param("ids") List<Integer> ids);
     @Modifying
     @Transactional

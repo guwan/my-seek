@@ -1,6 +1,6 @@
 package top.knos.mySeek.primary.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import tools.jackson.core.JacksonException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.stereotype.Service;
@@ -21,7 +21,7 @@ public class NovelOutlineService {
     }
 
     // 生成流程控制
-    public NovelOutline generateNovel(String storySummary, Integer totalChapters) throws JsonProcessingException {
+    public NovelOutline generateNovel(String storySummary, Integer totalChapters) throws JacksonException {
         //先看有没有历史记录
         NovelOutline outline = storageService.loadOutline();
         if(outline == null){

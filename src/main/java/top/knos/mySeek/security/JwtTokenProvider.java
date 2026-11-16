@@ -3,14 +3,12 @@ package top.knos.mySeek.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.servlet.error.ErrorAttributes;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,6 +18,8 @@ import top.knos.mySeek.security.domain.Authority;
 import top.knos.mySeek.security.domain.User;
 import top.knos.mySeek.security.service.impl.UserService;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
@@ -29,46 +29,71 @@ import java.util.stream.Collectors;
 @Component
 @Slf4j
 public class JwtTokenProvider {
-    @Autowired
-    private ErrorAttributes errorAttributes;
 
-    /**
-     * THIS IS NOT A SECURE PRACTICE! For simplicity, we are storing a static key here. Ideally, in a
-     * microservices environment, this key would be kept on a config-server.
-     */
-    @Value("${security.jwt.token.secret-key:secret-key}")
+    /** HS256 要求密钥至少 256 bit */
+    private static final int MIN_SECRET_BYTES = 32;
+
+    private final UserService userService;
+
+    @Value("${security.jwt.token.secret-key:}")
     private String secretKey;
 
     @Value("${security.jwt.token.expire-length:3600000}")
     private long validityInMilliseconds = 3600000; // 1h
 
-    @Autowired
-    private UserService userService;
+    /** 派生的 HMAC 密钥 */
+    private SecretKey signingKey;
+
+    public JwtTokenProvider(UserService userService) {
+        this.userService = userService;
+    }
 
     @PostConstruct
     protected void init() {
-        secretKey = Base64.getEncoder().encodeToString(secretKey.getBytes());
+        if (secretKey == null || secretKey.isBlank()) {
+            throw new IllegalStateException("未配置 security.jwt.token.secret-key，请通过环境变量 JWT_SECRET_KEY 注入");
+        }
+        this.signingKey = Keys.hmacShaKeyFor(deriveKeyBytes(secretKey));
+    }
+
+    /**
+     * 密钥字节派生：优先按 Base64 解码，解码后长度不足则退化为原始 UTF-8 字节。
+     */
+    private byte[] deriveKeyBytes(String raw) {
+        try {
+            byte[] decoded = Base64.getDecoder().decode(raw);
+            if (decoded.length >= MIN_SECRET_BYTES) {
+                return decoded;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // 非 Base64 格式，按原始字符串处理
+        }
+        byte[] bytes = raw.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException("security.jwt.token.secret-key 长度不足，至少需要 " + MIN_SECRET_BYTES + " 字节");
+        }
+        return bytes;
     }
 
     public String createToken(String username, Set<Authority> authorities) {
 
-        Claims claims = Jwts.claims().setSubject(username);
         List<SimpleGrantedAuthority> auth = authorities
                 .stream()
                 .map(authority -> new SimpleGrantedAuthority(authority.getAuthority()))
                 .collect(Collectors.toList());
-        claims.put("auth", auth);
 
         Date now = new Date();
         Date validity = new Date(now.getTime() + validityInMilliseconds);
 
-        return Jwts.builder()//
-                .setClaims(claims)//
-                .setIssuedAt(now)//
-                .setExpiration(validity)//
-                .signWith(SignatureAlgorithm.HS256, secretKey)//
+        return Jwts.builder()
+                .subject(username)
+                .claim("auth", auth)
+                .issuedAt(now)
+                .expiration(validity)
+                .signWith(signingKey, Jwts.SIG.HS256)
                 .compact();
     }
+
     @Transactional
     public Authentication getAuthentication(String token) {
         UserDetails userDetails = userService.loadUserByUsername(getUsername(token));
@@ -79,7 +104,12 @@ public class JwtTokenProvider {
     }
 
     public String getUsername(String token) {
-        return Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token).getBody().getSubject();
+        Claims claims = Jwts.parser()
+                .verifyWith(signingKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return claims.getSubject();
     }
 
     public String resolveToken(HttpServletRequest req) {
@@ -92,11 +122,9 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token);
+            Jwts.parser().verifyWith(signingKey).build().parseSignedClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
-            //throw new BadCredentialsException("jwt令牌无效或过期");
-            //errorAttributes.
             throw new JwtException("jwt令牌无效或过期");
         }
     }

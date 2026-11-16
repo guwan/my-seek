@@ -1,23 +1,23 @@
 package top.knos.mySeek.config;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
-import org.springframework.data.redis.core.*;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
+import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import org.springframework.ai.chat.messages.Message;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
 import top.knos.mySeek.primary.vo.MessageVo;
 
 /**
  * redis配置类
+ *
+ * <p>Spring Boot 4 默认使用 Jackson 3（tools.jackson 包），
+ * 序列化器已切换为 GenericJacksonJsonRedisSerializer / JacksonJsonRedisSerializer。
+ * 默认类型（多态反序列化）必须使用白名单校验器，避免反序列化漏洞。</p>
  *
  * @author knos
  */
@@ -25,48 +25,44 @@ import top.knos.mySeek.primary.vo.MessageVo;
 @EnableCaching //开启注解
 public class RedisConfig {
 
+    /**
+     * 业务对象多态反序列化白名单：仅允许本项目包与 JDK 常用类型
+     */
+    private static PolymorphicTypeValidator typeValidator() {
+        return BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType("top.knos.mySeek.")
+                .allowIfSubType("java.util.")
+                .allowIfSubType("java.lang.")
+                .allowIfSubType("java.time.")
+                .build();
+    }
+
     @Bean
     public RedisTemplate<String, Object> redisTemplate(LettuceConnectionFactory factory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(factory);
 
-        ObjectMapper om = new ObjectMapper();
-        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        om.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.WRAPPER_ARRAY);
+        GenericJacksonJsonRedisSerializer serializer = GenericJacksonJsonRedisSerializer.builder()
+                .enableDefaultTyping(typeValidator())
+                .build();
 
-        Jackson2JsonRedisSerializer<Object> jacksonSerializer =
-                new Jackson2JsonRedisSerializer<>(om, Object.class);
-
-        template.setValueSerializer(jacksonSerializer);
+        template.setValueSerializer(serializer);
         template.setKeySerializer(new StringRedisSerializer());
         template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(jacksonSerializer);
+        template.setHashValueSerializer(serializer);
         template.afterPropertiesSet();
 
         return template;
     }
+
     @Bean
     public RedisTemplate<String, MessageVo> messageRedisTemplate(LettuceConnectionFactory factory) {
         RedisTemplate<String, MessageVo> template = new RedisTemplate<>();
         template.setConnectionFactory(factory);
 
-        // 使用 StringRedisSerializer 序列化键
         template.setKeySerializer(new StringRedisSerializer());
 
-        // 配置 ObjectMapper
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        objectMapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.PROPERTY
-        );
-
-        // 使用 GenericJackson2JsonRedisSerializer 序列化值
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
+        JacksonJsonRedisSerializer<MessageVo> serializer = new JacksonJsonRedisSerializer<>(MessageVo.class);
         template.setValueSerializer(serializer);
         template.setHashValueSerializer(serializer);
 
@@ -74,60 +70,4 @@ public class RedisConfig {
 
         return template;
     }
-
-    /**
-     * 对hash类型的数据操作
-     *
-     * @param redisTemplate
-     * @return
-     */
-    @Bean
-    public HashOperations<String, String, Object> hashOperations(RedisTemplate<String, Object> redisTemplate) {
-        return redisTemplate.opsForHash();
-    }
-
-    /**
-     * 对redis字符串类型数据操作
-     *
-     * @param redisTemplate
-     * @return
-     */
-    @Bean
-    public ValueOperations<String, Object> valueOperations(RedisTemplate<String, Object> redisTemplate) {
-        return redisTemplate.opsForValue();
-    }
-
-    /**
-     * 对链表类型的数据操作
-     *
-     * @param redisTemplate
-     * @return
-     */
-    @Bean
-    public ListOperations<String, Object> listOperations(RedisTemplate<String, Object> redisTemplate) {
-        return redisTemplate.opsForList();
-    }
-
-    /**
-     * 对无序集合类型的数据操作
-     *
-     * @param redisTemplate
-     * @return
-     */
-    @Bean
-    public SetOperations<String, Object> setOperations(RedisTemplate<String, Object> redisTemplate) {
-        return redisTemplate.opsForSet();
-    }
-
-    /**
-     * 对有序集合类型的数据操作
-     *
-     * @param redisTemplate
-     * @return
-     */
-    @Bean
-    public ZSetOperations<String, Object> zSetOperations(RedisTemplate<String, Object> redisTemplate) {
-        return redisTemplate.opsForZSet();
-    }
-
 }

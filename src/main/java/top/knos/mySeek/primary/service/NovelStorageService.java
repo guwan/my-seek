@@ -1,9 +1,11 @@
 package top.knos.mySeek.primary.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import top.knos.mySeek.primary.vo.NovelChapter;
 import top.knos.mySeek.primary.vo.NovelOutline;
@@ -17,10 +19,14 @@ import java.nio.file.Path;
 @Service
 @Slf4j
 public class NovelStorageService {
-    private static final Path BASE_PATH = Path.of("F://小说/");
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final Path basePath;
+    private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
-    public void saveOutline(NovelOutline outline) throws JsonProcessingException {
+    public NovelStorageService(@Value("${novel.storage.path:./novel}") String basePath) {
+        this.basePath = Path.of(basePath);
+    }
+
+    public void saveOutline(NovelOutline outline) throws JacksonException {
         String content = objectMapper.writeValueAsString(outline);
 
         String fileName = "小说概要.json";
@@ -28,7 +34,7 @@ public class NovelStorageService {
         log.info("写入概要文件：{}",fileName);
     }
 
-    public NovelOutline loadOutline() throws JsonProcessingException {
+    public NovelOutline loadOutline() throws JacksonException {
 
         String fileName = "小说概要.json";
         log.debug("读取历史文件概要文件：{}",fileName);
@@ -57,7 +63,7 @@ public class NovelStorageService {
 
     private void saveToFile(String relativePath, String content) {
         try {
-            Path fullPath = BASE_PATH.resolve(relativePath);
+            Path fullPath = basePath.resolve(relativePath);
             Files.createDirectories(fullPath.getParent());
             Files.writeString(fullPath, content, StandardCharsets.UTF_8);
         } catch (IOException e) {
@@ -68,7 +74,7 @@ public class NovelStorageService {
 
     private String readFile(String relativePath) {
         try {
-            Path fullPath = BASE_PATH.resolve(relativePath);
+            Path fullPath = basePath.resolve(relativePath);
             return Files.readString(fullPath, StandardCharsets.UTF_8);
         } catch (NoSuchFileException e) {
             return null;

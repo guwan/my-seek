@@ -1,10 +1,10 @@
 package top.knos.mySeek.primary.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.stereotype.Service;
@@ -346,8 +346,9 @@ public class NovelChapterService {
 
     private NovelChapter parseChapterResponse(String response, int chapterNumber) {
         try {
-            ObjectMapper mapper = new JsonMapper()
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            ObjectMapper mapper = JsonMapper.builder()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                    .build();
 
             String processedContent = novelSupport.preprocessResponse(response);
             log.debug("预处理后内容：\\n{}", processedContent);
@@ -368,8 +369,8 @@ public class NovelChapterService {
                     node.path("title").asText().replaceAll("[\\\\\\\\/:*?\"<>|]", "_"),
                     content
             );
-        } catch (JsonProcessingException e) {
-            log.error("章节解析失败:\\n原文为：{}\\n错误为:\\n{}", response, ExceptionUtils.getStackTrace(e));
+        } catch (JacksonException e) {
+            log.error("章节解析失败:\n原文为：{}\n错误为:\n{}", response, ExceptionUtils.getStackTrace(e));
             throw new NovelGenerationException("章节解析失败: " + e.getMessage());
         }
     }

@@ -1,66 +1,64 @@
 spring:
-  application:
-    name: MySeek
-
-
   ai:
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
-        model: deepseek-r1:1.5b
+        model: ${OLLAMA_CHAT_MODEL:deepseek-r1:1.5b}
 
   datasource:
-    url: jdbc:mariadb://localhost:3306/seek?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
-    username: root
-    password: a1111a
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/seek?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.mariadb.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
     hikari:
       auto-commit: true
-      minimum-idle: 2
+      minimum-idle: 5
       idle-timeout: 60000
       connection-timeout: 30000
       max-lifetime: 1800000
       pool-name: dapHikari
-      maximum-pool-size: 5
+      maximum-pool-size: 30
   jpa:
-    database: mysql
     show-sql: false
-    properties:
-      hibernate:
-        format_sql: false
-    generate-ddl: true
     database-platform: org.hibernate.dialect.MariaDBDialect
     hibernate:
-      ddl-auto: update
+      # 生产环境禁止自动改表，schema 变更请通过迁移脚本完成
+      ddl-auto: validate
       dialect: org.hibernate.dialect.MariaDBDialect
 
   data:
     redis:
       database: 2
-      password: '!@#Pwdadc2'
-      host: 192.168.0.73
-      port: 6379
+      password: ${REDIS_PASSWORD:}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       # 连接超时时间（毫秒） 去链接redis服务端
       timeout: 6000
+      client-name: my-seek
       lettuce:
         pool:
           max-active: 200
           # 连接池最大阻塞等待时间（使用负值表示没有限制） 表示连接池的链接拿完了 现在去申请需要等待的时间
           max-wait: -1
           # 连接池中的最大空闲连接
-          max-idle: 10
+          max-idle: 20
           # 连接池中的最小空闲连接
-          min-idle: 0
+          min-idle: 5
 
 captcha:
-  key: "captcha_"
-  timeout: 60
+  key: ${CAPTCHA_KEY:captcha_}
+  timeout: ${CAPTCHA_TIMEOUT:60}
 
 mail:
   send:
-    host: smtp.qq.com
-    mail: xxxx@qq.com
-    token: xxxx
+    host: ${MAIL_HOST:}
+    mail: ${MAIL_ACCOUNT:}
+    token: ${MAIL_TOKEN:}
     register:
-      host: http://localhost:8080
+      host: ${REGISTER_HOST:}
+
+logging:
+  level:
+    root: INFO
+    top.knos: INFO

@@ -1,6 +1,5 @@
 package top.knos.mySeek.security.support;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import top.knos.mySeek.exception.TipsException;
 import top.knos.mySeek.security.repository.UserRepository;
@@ -13,16 +12,22 @@ import java.util.regex.Pattern;
 
 @Service
 public class UserCheck {
-    @Autowired
-    private UserRepository userRepository;
-    @Autowired
-    private GrecaptchaService grecaptchaService;
+
+    private final UserRepository userRepository;
+    private final GrecaptchaService grecaptchaService;
+
+    public UserCheck(UserRepository userRepository, GrecaptchaService grecaptchaService) {
+        this.userRepository = userRepository;
+        this.grecaptchaService = grecaptchaService;
+    }
+
     public void checkRegister(UserRegisterReq userRegisterReq) {
         if(!Objects.equals("on",userRegisterReq.getAgreeTerms())){
             throw new TipsException("没同意协议，无法注册");
         }
-        //利用正则表达式（可改进）验证邮箱是否符合邮箱的格式
-        if(userRegisterReq.getEmail()==null&&!userRegisterReq.getEmail().matches("^\\w+@(\\w+\\.)+\\w+$")){
+        //利用正则表达式验证邮箱是否符合邮箱的格式
+        String email = userRegisterReq.getEmail();
+        if (email == null || !email.matches("^\\w+@(\\w+\\.)+\\w+$")) {
             throw new TipsException("邮箱格式错误");
         }
         checkPhone(userRegisterReq.getPhone());
@@ -43,16 +48,14 @@ public class UserCheck {
         }
     }
     public  void checkPhone(String phone) {
-        String regex = "^((13[0-9])|(14[5,7,9])|(15([0-3]|[5-9]))|(166)|(17[0,1,3,5,6,7,8])|(18[0-9])|(19[8|9]))\\d{8}$";
-        if (phone.length() != 11) {
+        if (phone == null || phone.length() != 11) {
             throw new TipsException("手机号应为11位数");
-        } else {
-            Pattern p = Pattern.compile(regex);
-            Matcher m = p.matcher(phone);
-            boolean isMatch = m.matches();
-            if (!isMatch) {
-                throw new TipsException("请填入正确的手机号");
-            }
+        }
+        String regex = "^((13[0-9])|(14[5,7,9])|(15([0-3]|[5-9]))|(166)|(17[0,1,3,5,6,7,8])|(18[0-9])|(19[8|9]))\\d{8}$";
+        Pattern p = Pattern.compile(regex);
+        Matcher m = p.matcher(phone);
+        if (!m.matches()) {
+            throw new TipsException("请填入正确的手机号");
         }
     }
 }

@@ -1,248 +1,52 @@
 package top.knos.mySeek.security.vo.res;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import top.knos.mySeek.security.domain.UserTag;
-
-import java.util.Date;
-import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Data;
+import top.knos.mySeek.security.domain.User;
 
 /**
  * TODO
  *
  * @Author 技术古玩
- * @Date 2021/5/5 20:29
+ * @Date 2021/5/1 20:50
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@Data
 public class UserQueryRes {
-
     private Long id;
-    //登录名
-    private String username;
-    private boolean accountNonExpired;
-    private boolean accountNonLocked;
-    private boolean credentialsNonExpired;
-    private boolean enabled;
-    //昵称
     private String name;
     private String avatar;
-    private String phone;
-    private String dialPhone;
-    private String job;
+    private String userid;
     private String email;
     private String signature;
     private String title;
-    private String businessGroup;
+    private String group;
+    private Integer notifyCount;
+    private Integer unreadCount;
     private String country;
-    private Long geographic;
-    private Long address;
+    private String access;
+    private String address;
+    private String phone;
     private String homeUrl;
 
-
-    @JsonFormat(pattern="yyyy-MM-dd HH:mm:ss", locale = "zh", timezone="GMT+8")
-    private Date createdAt;
-    @JsonFormat(pattern="yyyy-MM-dd HH:mm:ss", locale = "zh", timezone="GMT+8")
-    private Date updateAt ;
-    private String access;
-
-    private List<UserTag> tags;
-    private Integer level;
-
-    public Integer getLevel() {
-        return level;
-    }
-
-    public void setLevel(Integer level) {
-        this.level = level;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getKey() {
-        return id+"";
-    }
-
-    public String getUserid() {
-        return id+"";
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public boolean isAccountNonExpired() {
-        return accountNonExpired;
-    }
-
-    public void setAccountNonExpired(boolean accountNonExpired) {
-        this.accountNonExpired = accountNonExpired;
-    }
-
-    public boolean isAccountNonLocked() {
-        return accountNonLocked;
-    }
-
-    public void setAccountNonLocked(boolean accountNonLocked) {
-        this.accountNonLocked = accountNonLocked;
-    }
-
-    public boolean isCredentialsNonExpired() {
-        return credentialsNonExpired;
-    }
-
-    public void setCredentialsNonExpired(boolean credentialsNonExpired) {
-        this.credentialsNonExpired = credentialsNonExpired;
-    }
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getAvatar() {
-        return avatar;
-    }
-
-    public void setAvatar(String avatar) {
-        this.avatar = avatar;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public String getJob() {
-        return job;
-    }
-
-    public void setJob(String job) {
-        this.job = job;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getSignature() {
-        return signature;
-    }
-
-    public void setSignature(String signature) {
-        this.signature = signature;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getBusinessGroup() {
-        return businessGroup;
-    }
-
-    public void setBusinessGroup(String businessGroup) {
-        this.businessGroup = businessGroup;
-    }
-
-    public String getCountry() {
-        return country;
-    }
-
-    public void setCountry(String country) {
-        this.country = country;
-    }
-
-    public Long getGeographic() {
-        return geographic;
-    }
-
-    public void setGeographic(Long geographic) {
-        this.geographic = geographic;
-    }
-
-    public Long getAddress() {
-        return address;
-    }
-
-    public void setAddress(Long address) {
-        this.address = address;
-    }
-
-    public String getHomeUrl() {
-        return homeUrl;
-    }
-
-    public void setHomeUrl(String homeUrl) {
-        this.homeUrl = homeUrl;
-    }
-
-    public Date getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Date createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Date getUpdateAt() {
-        return updateAt;
-    }
-
-    public void setUpdateAt(Date updateAt) {
-        this.updateAt = updateAt;
-    }
-
-    public List<UserTag> getTags() {
-        return tags;
-    }
-
-    public void setTags(List<UserTag> tags) {
-        this.tags = tags;
-    }
-
-    public String getAccess() {
-        return access;
-    }
-
-    public void setAccess(String access) {
-        this.access = access;
-    }
-
-    public String getDialPhone() {
-        return dialPhone;
-    }
-
-    public void setDialPhone(String dialPhone) {
-        this.dialPhone = dialPhone;
+    public static UserQueryRes of(User user) {
+        UserQueryRes res = new UserQueryRes();
+        res.setName(user.getName());
+        res.setAvatar(user.getAvatar());
+        res.setUserid(user.getUsername());
+        res.setEmail(user.getEmail());
+        res.setSignature(user.getSignature());
+        res.setTitle(user.getTitle());
+        res.setGroup(user.getBusinessGroup());
+        res.setNotifyCount(0);
+        res.setUnreadCount(0);
+        res.setCountry(user.getCountry());
+        res.setAccess("admin");
+        res.setAddress("");
+        res.setPhone(user.getPhone());
+        res.setHomeUrl(user.getHomeUrl());
+        return res;
     }
 }

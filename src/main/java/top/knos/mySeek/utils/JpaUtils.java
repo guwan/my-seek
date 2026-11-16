@@ -29,13 +29,13 @@ public class JpaUtils {
         return PageRequest.of(pageReq.getCurrent() - 1, pageReq.getPageSize(), Sort.by(Sort.Order.asc("id")));
     }
 
-    private static ExampleMatcher defaultExampleMatcher = null;
+    /**
+     * 忽略 null 值的 Example 匹配器（不可变，线程安全）
+     */
+    private static final ExampleMatcher DEFAULT_EXAMPLE_MATCHER = ExampleMatcher.matching().withIgnoreNullValues();
 
     public static ExampleMatcher getExampleMatcher() {
-        if (defaultExampleMatcher == null) {
-            defaultExampleMatcher = ExampleMatcher.matching().withIgnoreNullValues();
-        }
-        return defaultExampleMatcher;
+        return DEFAULT_EXAMPLE_MATCHER;
     }
 
     public static <T> Example<T> createExample(Object userQueryReq, Class<T> targetClass) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {

@@ -3,7 +3,6 @@ package top.knos.mySeek.security.service;
 import jakarta.transaction.Transactional;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -29,8 +28,12 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ResourceService {
-    @Autowired
-    private ResourceRepository resourceRepository;
+
+    private final ResourceRepository resourceRepository;
+
+    public ResourceService(ResourceRepository resourceRepository) {
+        this.resourceRepository = resourceRepository;
+    }
 
     public void add(MenuAddReq menuAddReq) {
 
@@ -106,8 +109,8 @@ public class ResourceService {
 
                 parent = new Resource();
                 parent.setType(1);
-                parent.setSort(lastResource.getSort() + 100);
-                parent.setIcon(lastResource.getIcon());
+                parent.setSort(lastResource == null ? 100 : lastResource.getSort() + 100);
+                parent.setIcon(lastResource == null ? null : lastResource.getIcon());
                 parent.setName(menuAddReq.getParentName());
                 parent.setShowName(menuAddReq.getParentShowName());
                 parent.setDisabled(false);
@@ -129,8 +132,8 @@ public class ResourceService {
         if (pathDeep == 1) {
             //顶级目录,查找排序最后的目录
             Resource lastResource = resourceRepository.findFirstByParentIsNullOrderBySortDesc();
-            resource.setSort(lastResource.getSort() + 100);
-            resource.setIcon(lastResource.getIcon());
+            resource.setSort(lastResource == null ? 100 : lastResource.getSort() + 100);
+            resource.setIcon(lastResource == null ? null : lastResource.getIcon());
 
             String resourceName = path.substring(1);
             resource.setName(resourceName);
@@ -193,7 +196,7 @@ public class ResourceService {
         }
         return count;
     }
-    public PageVo<MenuQueryRes> copy(MenuQueryReq menuQueryReq) {
+    public Resource copy(MenuQueryReq menuQueryReq) {
         Optional<Resource> resourceOptional = resourceRepository.findById(menuQueryReq.getId());
         if (resourceOptional.isEmpty()) {
             throw new RuntimeException("请求参数错误");
@@ -223,7 +226,8 @@ public class ResourceService {
                     for (Resource child2 : children2) {
                         Resource newChild2 = new Resource();
                         BeanUtils.copyProperties(child2, newChild2);
-                        newChild2.setParent(child1);
+                        // 挂到复制出来的新节点下，而不是原节点
+                        newChild2.setParent(newChild);
                         newChild2.setId(null);
                         resourceRepository.save(newChild2);
                     }
@@ -231,6 +235,6 @@ public class ResourceService {
             }
         }
 
-        return null;
+        return newResource;
     }
 }

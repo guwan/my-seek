@@ -79,7 +79,7 @@ public class Result<T>  {
     }
 
     public static Result<Object> fail() {
-        return new Result<Object>(false);
+        return new Result<Object>(false, null, HttpStatus.BAD_REQUEST.value());
     }
 
     public static Result<Object> fail(String msg) {
@@ -95,7 +95,7 @@ public class Result<T>  {
     }
 
     public static Result<Object> unauthorized() {
-        return new Result<Object>(true, "未登录或登录已过期", HttpStatus.UNAUTHORIZED.value());
+        return new Result<Object>(false, "未登录或登录已过期", HttpStatus.UNAUTHORIZED.value());
     }
 
 }

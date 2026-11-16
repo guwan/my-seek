@@ -12,6 +12,11 @@ import java.util.*;
  * @date 2018/11/14 11:05
  */
 @Entity(name = "sso_user")
+@Table(indexes = {
+        @Index(name = "idx_sso_user_username", columnList = "username"),
+        @Index(name = "idx_sso_user_email", columnList = "email"),
+        @Index(name = "idx_sso_user_phone", columnList = "phone")
+})
 @Data
 public class User implements UserDetails {
     @Id

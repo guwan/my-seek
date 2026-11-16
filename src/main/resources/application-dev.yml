@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:mariadb://localhost:3306/seek?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
-    username: root
-    password: a1111a
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/seek?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.mariadb.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
     hikari:
@@ -12,14 +12,9 @@ spring:
       connection-timeout: 30000
       max-lifetime: 1800000
       pool-name: dapHikari
-      maximum-pool-size: 5
+      maximum-pool-size: 10
   jpa:
-    database: mysql
     show-sql: false
-    properties:
-      hibernate:
-        format_sql: false
-    generate-ddl: true
     database-platform: org.hibernate.dialect.MariaDBDialect
     hibernate:
       ddl-auto: update
@@ -28,12 +23,12 @@ spring:
   data:
     redis:
       database: 5
-      password: '!@#Pwdadc2'
-      #host: 192.168.0.73
-      host: localhost
-      port: 6379
+      password: ${REDIS_PASSWORD:}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       # 连接超时时间（毫秒） 去链接redis服务端
       timeout: 6000
+      client-name: my-seek
       lettuce:
         pool:
           max-active: 200
@@ -45,13 +40,17 @@ spring:
           min-idle: 0
 
 captcha:
-  key: "captcha_"
-  timeout: 60
+  key: ${CAPTCHA_KEY:captcha_}
+  timeout: ${CAPTCHA_TIMEOUT:60}
 
 mail:
   send:
-    host: smtp.qq.com
-    mail: xxxx@qq.com
-    token: xxxx
+    host: ${MAIL_HOST:}
+    mail: ${MAIL_ACCOUNT:}
+    token: ${MAIL_TOKEN:}
     register:
-      host: http://localhost:8080
+      host: ${REGISTER_HOST:http://localhost:8080}
+
+logging:
+  level:
+    top.knos: DEBUG

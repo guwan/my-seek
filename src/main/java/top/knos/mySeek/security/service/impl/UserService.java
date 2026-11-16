@@ -1,6 +1,5 @@
 package top.knos.mySeek.security.service.impl;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -20,8 +19,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 import top.knos.mySeek.exception.TipsException;
 import top.knos.mySeek.security.domain.Authority;
 import top.knos.mySeek.security.domain.DataOrg;
@@ -32,7 +29,6 @@ import top.knos.mySeek.security.repository.AuthorityRepository;
 import top.knos.mySeek.security.repository.DataOrgRepository;
 import top.knos.mySeek.security.repository.ResourceRepository;
 import top.knos.mySeek.security.repository.UserRepository;
-import top.knos.mySeek.security.service.GrecaptchaService;
 import top.knos.mySeek.security.service.UserDetailsManager;
 import top.knos.mySeek.security.service.ValidateUserSupport;
 import top.knos.mySeek.security.support.SecurityUtils;
@@ -64,17 +60,13 @@ public class UserService implements UserDetailsManager {
     private final AuthorityRepository authorityRepository;
     private final DataOrgRepository dataOrgRepository;
     private final ResourceRepository resourceRepository;
-    private final GrecaptchaService grecaptchaService;
     private final PasswordEncoder passwordEncoder;
     private final ValidateUserSupport validateUserSupport;
     private UserCache userCache = new NullUserCache();
 
-    private static final String SPRING_SECURITY_FORM_CAPTCHA_KEY = "captcha";
-    private final String captchaParameter = SPRING_SECURITY_FORM_CAPTCHA_KEY;
-
     public UserService(UserRepository userRepository,
                        AuthorityRepository authorityRepository,
-                       DataOrgRepository dataOrgRepository, ResourceRepository resourceRepository, GrecaptchaService grecaptchaService,
+                       DataOrgRepository dataOrgRepository, ResourceRepository resourceRepository,
                        PasswordEncoder passwordEncoder,
                        ValidateUserSupport validateUserSupport) {
 
@@ -82,7 +74,6 @@ public class UserService implements UserDetailsManager {
         this.authorityRepository = authorityRepository;
         this.dataOrgRepository = dataOrgRepository;
         this.resourceRepository = resourceRepository;
-        this.grecaptchaService = grecaptchaService;
         this.passwordEncoder = passwordEncoder;
         this.validateUserSupport = validateUserSupport;
     }
@@ -91,20 +82,8 @@ public class UserService implements UserDetailsManager {
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        //登录时，校验验证码是否正确
-        HttpServletRequest request = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getRequest();
-        //获取验证码
-        String captcha = request.getParameter(captchaParameter);
-        if (captcha == null) {
-            captcha = "";
-        }
-
-        captcha = captcha.trim();
-
-        boolean valid = grecaptchaService.validate(username, captcha);
-        if (!valid) {
-            throw new UsernameNotFoundException("验证码错误");
-        }
+        // 注意：验证码校验属于登录流程（AuthService），此处只负责加载用户，
+        // 否则 JWT 鉴权路径（无验证码参数）会被误判为验证码错误。
         User user = userRepository.findByUsername(username);
         if (user == null) {
             throw new UsernameNotFoundException("用户不存在");

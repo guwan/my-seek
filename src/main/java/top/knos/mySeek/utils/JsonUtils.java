@@ -1,87 +1,87 @@
 package top.knos.mySeek.utils;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.io.JsonStringEncoder;
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.io.JsonStringEncoder;
+import tools.jackson.databind.JavaType;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 
-
+/**
+ * JSON 工具类（基于 Spring Boot 4 默认的 Jackson 3）
+ */
+@Slf4j
 public class JsonUtils {
 
-    // 定义jackson对象
-    public static final ObjectMapper mapper = new ObjectMapper();
+    /** 线程安全的 ObjectMapper 实例 */
+    public static final ObjectMapper mapper = JsonMapper.builder().build();
 
     /**
      * 将对象转换成json字符串。
-     * <p>Title: pojoToJson</p>
-     * <p>Description: </p>
-     * @param data
-     * @return
      */
     public static String objectToJson(Object data) {
-    	try {
+        try {
             return mapper.writeValueAsString(data);
-		} catch (JsonProcessingException e) {
-			e.printStackTrace();
-		}
-    	return null;
+        } catch (JacksonException e) {
+            log.error("对象序列化为 JSON 失败", e);
+            throw new IllegalStateException("对象序列化为 JSON 失败", e);
+        }
     }
 
-
-    @SneakyThrows
+    /**
+     * 解析 json 字符串为 JsonNode
+     */
     public static JsonNode strToJson(String data) {
-        return mapper.readTree(data);
+        try {
+            return mapper.readTree(data);
+        } catch (JacksonException e) {
+            log.error("JSON 解析失败", e);
+            throw new IllegalStateException("JSON 解析失败", e);
+        }
     }
-    @SneakyThrows
+
+    /**
+     * 将 JsonNode 转换为指定类型的对象
+     */
     public static <T> T JsonNodeToObject(JsonNode jsonNode, Class<T> beanType) {
-        return mapper.readValue(jsonNode.toString(),  beanType);
+        try {
+            return mapper.readValue(jsonNode.toString(), beanType);
+        } catch (JacksonException e) {
+            log.error("JsonNode 转换为对象失败: {}", beanType.getName(), e);
+            throw new IllegalStateException("JsonNode 转换为对象失败", e);
+        }
     }
-    
+
     /**
      * 将json结果集转化为对象
-     * 
-     * @param jsonData json数据
-     * @param beanType 对象中的object类型
-     * @return
      */
     public static <T> T jsonToPojo(String jsonData, Class<T> beanType) {
         try {
-            T t = mapper.readValue(jsonData, beanType);
-            return t;
-        } catch (Exception e) {
-        	e.printStackTrace();
+            return mapper.readValue(jsonData, beanType);
+        } catch (JacksonException e) {
+            log.error("JSON 反序列化失败: {}", beanType.getName(), e);
+            return null;
         }
-        return null;
     }
-    
+
     /**
      * 将json数据转换成pojo对象list
-     * <p>Title: jsonToList</p>
-     * <p>Description: </p>
-     * @param jsonData
-     * @param beanType
-     * @return
      */
-    public static <T>List<T> jsonToList(String jsonData, Class<T> beanType) {
-    	JavaType javaType = mapper.getTypeFactory().constructParametricType(List.class, beanType);
-    	try {
-    		List<T> list = mapper.readValue(jsonData, javaType);
-    		return list;
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-    	
-    	return null;
+    public static <T> List<T> jsonToList(String jsonData, Class<T> beanType) {
+        JavaType javaType = mapper.getTypeFactory().constructParametricType(List.class, beanType);
+        try {
+            return mapper.readValue(jsonData, javaType);
+        } catch (JacksonException e) {
+            log.error("JSON 反序列化为列表失败: {}", beanType.getName(), e);
+            return List.of();
+        }
     }
 
     /**
      * 对不合法的json转义
-     * @param input
-     * @return
      */
     public static String escapeJsonWithJackson(String input) {
         JsonStringEncoder encoder = JsonStringEncoder.getInstance();
@@ -89,5 +89,4 @@ public class JsonUtils {
         encoder.quoteAsString(input, escaped);
         return escaped.toString();
     }
-    
 }

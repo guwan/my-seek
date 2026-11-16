@@ -61,10 +61,10 @@ public class AuthService {
     public Result<Object> login(LoginReq loginReq) {
         boolean verify = redisCaptchaUtil.verifyLoginCaptcha(loginReq.getCaptchaKey(), loginReq.getCaptcha());
         if (!verify) {
-            return new Result<>(true, "验证码错误", HttpStatus.BAD_REQUEST.value());
+            return Result.fail(HttpStatus.BAD_REQUEST.value(), "验证码错误");
         }
         String token = login(loginReq.getUsername(), loginReq.getPassword());
-        log.debug("登录成功：{}", token);
+        log.debug("登录成功，用户: {}", loginReq.getUsername());
         return Result.ok(token);
     }
 

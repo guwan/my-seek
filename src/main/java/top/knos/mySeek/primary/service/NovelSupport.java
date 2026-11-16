@@ -1,13 +1,11 @@
 package top.knos.mySeek.primary.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import top.knos.mySeek.exception.InvalidOutlineException;
 import top.knos.mySeek.exception.NovelGenerationException;
 import top.knos.mySeek.primary.vo.ChatRequest;
@@ -56,12 +54,12 @@ public class NovelSupport {
         }
         // 新增字符替换（处理中文符号问题）
 //        cleaned = cleaned
-//                .replaceAll("[“”]", "\"")   // 替换中文双引号
-//                .replaceAll("[‘’]", "'")    // 替换中文单引号
-//                .replaceAll("\\\\\"", "\"") // 处理转义引号
-//                .replaceAll("：", ":")       // 替换中文冒号
-//                .replaceAll("，", ",")      // 替换中文逗号
-//                .replaceAll("；", ";");     // 替换中文分号
+//                .replaceAll("[\"\"]", "\"")   // 替换中文双引号
+//                .replaceAll("[\u2018\u2019]", "'")    // 替换中文单引号
+//                .replaceAll("\\\\\\\"", "\"") // 处理转义引号
+//                .replaceAll("\uff1a", ":")       // 替换中文冒号
+//                .replaceAll("\uff0c", ",")      // 替换中文逗号
+//                .replaceAll("\uff1b", ";");     // 替换中文分号
 
         return cleaned;
     }
@@ -132,11 +130,12 @@ public class NovelSupport {
     }
 
     public NovelOutline parseValidatedJson(String json, int totalChapters)
-            throws JsonProcessingException, InvalidOutlineException {
+            throws JacksonException, InvalidOutlineException {
 
-        ObjectMapper mapper = new JsonMapper()
-                .registerModule(new JavaTimeModule())
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        // Jackson 3 已内置 java.time 支持，无需额外注册 JavaTimeModule
+        JsonMapper mapper = JsonMapper.builder()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .build();
 
         JsonNode root = mapper.readTree(json);
 
@@ -170,12 +169,10 @@ public class NovelSupport {
         validateStoryStructure(parts, totalChapters);
 
         return new NovelOutline(
-
                 root.path("summary").asText(),
                 mapper.convertValue(
                         root.path("characterSettings"),
-                        new TypeReference<List<String>>(){}
-                ),
+                        new TypeReference<List<String>>(){}),
                 parts,
                 globalPlotPoints // 合并所有章节情节点
         );
