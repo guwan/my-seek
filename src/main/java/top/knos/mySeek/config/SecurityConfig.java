@@ -26,6 +26,8 @@ public class SecurityConfig {
     public static final String[] PUBLIC = new String[]{
             "/api/auth/**",
             "/api/open/**",
+            "/actuator/health",
+            "/actuator/health/**",
     };
 
     private final JwtTokenProvider jwtTokenProvider;

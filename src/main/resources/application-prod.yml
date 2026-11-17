@@ -21,11 +21,9 @@ spring:
       maximum-pool-size: 30
   jpa:
     show-sql: false
-    database-platform: org.hibernate.dialect.MariaDBDialect
     hibernate:
       # 生产环境禁止自动改表，schema 变更请通过迁移脚本完成
       ddl-auto: validate
-      dialect: org.hibernate.dialect.MariaDBDialect
 
   data:
     redis:
@@ -36,7 +34,9 @@ spring:
       # 连接超时时间（毫秒） 去链接redis服务端
       timeout: 6000
       client-name: my-seek
-      lettuce:
+      # Spring AI 2.0 的 RedisVectorStore 依赖 JedisConnectionFactory，必须切换为 jedis 客户端
+      client-type: jedis
+      jedis:
         pool:
           max-active: 200
           # 连接池最大阻塞等待时间（使用负值表示没有限制） 表示连接池的链接拿完了 现在去申请需要等待的时间

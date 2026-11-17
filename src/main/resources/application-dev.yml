@@ -1,8 +1,15 @@
 spring:
+  ai:
+    vectorstore:
+      redis:
+        # 开发环境不在启动期连接 Redis（向量索引依赖 Redis Stack 的 RediSearch 模块），
+        # 保证本地未部署 Redis 时应用仍可正常启动；如需自动建索引请设置
+        # VECTOR_STORE_INITIALIZE_SCHEMA=true 并确保 Redis 可用
+        initialize-schema: false
   datasource:
     url: ${DB_URL:jdbc:mariadb://localhost:3306/seek?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:a1111a}
     driver-class-name: org.mariadb.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
     hikari:
@@ -15,10 +22,8 @@ spring:
       maximum-pool-size: 10
   jpa:
     show-sql: false
-    database-platform: org.hibernate.dialect.MariaDBDialect
     hibernate:
       ddl-auto: update
-      dialect: org.hibernate.dialect.MariaDBDialect
 
   data:
     redis:
@@ -29,7 +34,9 @@ spring:
       # 连接超时时间（毫秒） 去链接redis服务端
       timeout: 6000
       client-name: my-seek
-      lettuce:
+      # Spring AI 2.0 的 RedisVectorStore 依赖 JedisConnectionFactory，必须切换为 jedis 客户端
+      client-type: jedis
+      jedis:
         pool:
           max-active: 200
           # 连接池最大阻塞等待时间（使用负值表示没有限制） 表示连接池的链接拿完了 现在去申请需要等待的时间

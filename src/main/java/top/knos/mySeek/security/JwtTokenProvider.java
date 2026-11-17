@@ -9,6 +9,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,6 +22,7 @@ import top.knos.mySeek.security.service.impl.UserService;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
@@ -34,6 +37,7 @@ public class JwtTokenProvider {
     private static final int MIN_SECRET_BYTES = 32;
 
     private final UserService userService;
+    private final Environment environment;
 
     @Value("${security.jwt.token.secret-key:}")
     private String secretKey;
@@ -44,14 +48,25 @@ public class JwtTokenProvider {
     /** 派生的 HMAC 密钥 */
     private SecretKey signingKey;
 
-    public JwtTokenProvider(UserService userService) {
+    public JwtTokenProvider(UserService userService, Environment environment) {
         this.userService = userService;
+        this.environment = environment;
     }
 
     @PostConstruct
     protected void init() {
         if (secretKey == null || secretKey.isBlank()) {
-            throw new IllegalStateException("未配置 security.jwt.token.secret-key，请通过环境变量 JWT_SECRET_KEY 注入");
+            // 生产环境必须显式配置密钥，避免多实例使用随机密钥导致 token 互相不认
+            if (environment.acceptsProfiles(Profiles.of("prod"))) {
+                throw new IllegalStateException("未配置 security.jwt.token.secret-key，请通过环境变量 JWT_SECRET_KEY 注入");
+            }
+            // 开发环境生成临时随机密钥，保证开箱即用（重启后历史 token 失效）
+            byte[] randomKey = new byte[MIN_SECRET_BYTES];
+            new SecureRandom().nextBytes(randomKey);
+            this.signingKey = Keys.hmacShaKeyFor(randomKey);
+            log.warn("未配置 security.jwt.token.secret-key，已启用临时随机密钥（仅限开发环境，重启后所有 token 失效）。"
+                    + "生产环境请通过环境变量 JWT_SECRET_KEY 注入。");
+            return;
         }
         this.signingKey = Keys.hmacShaKeyFor(deriveKeyBytes(secretKey));
     }

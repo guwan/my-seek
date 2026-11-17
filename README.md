@@ -27,13 +27,21 @@
 - Redis 6+
 - （可选）Ollama 本地模型服务
 
+> **启动顺序**：MariaDB → Redis → Ollama → 应用。
+> Redis 未启动时应用仍可启动（开发环境不在启动期连接 Redis），但验证码、聊天记忆、知识库等功能会报错。
+>
+> **知识库（RAG）额外要求**：
+> 1. Redis 必须带 RediSearch 模块（Redis Stack），普通 Redis 执行 `FT.*` 会失败；
+> 2. 本地 Ollama 需安装嵌入模型：`ollama pull nomic-embed-text`（可用 `OLLAMA_EMBEDDING_MODEL` 覆盖）。
+
+
 ## 关键环境变量
 
 所有敏感配置均通过环境变量注入，不再硬编码在配置文件里。
 
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
-| `JWT_SECRET_KEY` | JWT 签名密钥，至少 32 字节；未配置时服务启动即失败 | 无（必填） |
+| `JWT_SECRET_KEY` | JWT 签名密钥，至少 32 字节；**生产环境未配置时启动即失败**，开发环境会自动生成临时密钥 | 无（prod 必填） |
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 数据库连接 | `jdbc:mariadb://localhost:3306/seek` / `root` / 空 |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Redis 连接 | `localhost` / `6379` / 空 |
 | `DOUBAO_API_KEY` / `DOUBAO_BASE_URL` | 豆包模型 | 空 / 火山方舟地址 |

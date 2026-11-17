@@ -3,7 +3,7 @@ package top.knos.mySeek.config;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
@@ -38,7 +38,7 @@ public class RedisConfig {
     }
 
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(LettuceConnectionFactory factory) {
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(factory);
 
@@ -56,7 +56,7 @@ public class RedisConfig {
     }
 
     @Bean
-    public RedisTemplate<String, MessageVo> messageRedisTemplate(LettuceConnectionFactory factory) {
+    public RedisTemplate<String, MessageVo> messageRedisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<String, MessageVo> template = new RedisTemplate<>();
         template.setConnectionFactory(factory);
 

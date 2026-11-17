@@ -37,16 +37,35 @@ spring:
     type: redis
 
   ai:
+    # 显式指定各模型类型的提供方：
+    # - chat/embedding 使用 ollama（本地），同时避免 OpenAI 的 EmbeddingModel 与之冲突
+    # - 音频/图像/审核一律关闭：豆包与千问由 Doubao/QwenModelProvider 自行构造兼容客户端，
+    #   不依赖 Spring AI 的 openai 自动装配（未配置 api-key 时自动装配会直接导致启动失败）
+    model:
+      chat: ollama
+      embedding: ollama
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
         model: ${OLLAMA_CHAT_MODEL:deepseek-r1:8b}
+      embedding:
+        options:
+          model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+      init:
+        # 启动时不自动拉取模型，避免本地缺少嵌入模型时长时间阻塞启动
+        pull-model-strategy: ${OLLAMA_PULL_MODEL_STRATEGY:NEVER}
     # 向量存储配置（使用 Redis）
     vectorstore:
       redis:
         index-name: knowledge-base
         prefix: "doc:"
-        initialize-schema: true
+        # 开启后启动期会连接 Redis 并创建向量索引（需要 Redis Stack 的 RediSearch 模块）
+        initialize-schema: ${VECTOR_STORE_INITIALIZE_SCHEMA:true}
 
 # 豆包（字节跳动）配置
 doubao:

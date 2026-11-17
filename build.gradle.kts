@@ -56,6 +56,10 @@ dependencies {
 	// Lettuce 连接池（spring.data.redis.lettuce.pool.* 配置生效所需）
 	implementation("org.apache.commons:commons-pool2")
 
+	// Spring AI 2.0 的 RedisVectorStore 依赖 Jedis 7.4+ 的统一客户端 redis.clients.jedis.RedisClient，
+	// 而 Spring Boot 4.0 的 BOM 默认锁定 7.0.0（无该类），此处提升版本以启用向量库自动装配
+	runtimeOnly("redis.clients:jedis:7.4.1")
+
 	//jwt
 	implementation("io.jsonwebtoken:jjwt-api:0.13.0")
 	implementation("io.jsonwebtoken:jjwt-impl:0.13.0")
@@ -79,6 +83,10 @@ dependencies {
 dependencyManagement {
 	imports {
 		mavenBom("org.springframework.ai:spring-ai-bom:${property("springAiVersion")}")
+	}
+	dependencies {
+		// 覆盖 Spring Boot BOM 中锁定的 jedis 7.0.0，保证 redis.clients.jedis.RedisClient 存在
+		dependency("redis.clients:jedis:7.4.1")
 	}
 }
 

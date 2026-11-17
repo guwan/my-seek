@@ -9,7 +9,9 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import top.knos.mySeek.exception.CustomHttpException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -107,8 +109,28 @@ public class VectorStoreService {
             return results;
         } catch (Exception e) {
             log.error("搜索文档失败: {}", query, e);
-            throw new RuntimeException("搜索文档失败: " + e.getMessage());
+            throw new CustomHttpException(describeFailure(e), HttpStatus.SERVICE_UNAVAILABLE);
         }
+    }
+
+    /**
+     * 把底层异常翻译成可读提示。
+     * <p>向量检索依赖 Redis 的 RediSearch（Redis Stack）模块，普通 Redis 会返回
+     * “Unknown command FT.SEARCH”，这里给出明确的安装指引而不是 500。</p>
+     */
+    private String describeFailure(Exception e) {
+        String message = e.getMessage() == null ? "" : e.getMessage();
+        if (message.contains("not found, try pulling")) {
+            return "向量检索不可用：本地 Ollama 未安装嵌入模型，请执行 `ollama pull nomic-embed-text`";
+        }
+        if (message.contains("FT.") || message.contains("Unknown command")) {
+            return "向量检索不可用：Redis 缺少 RediSearch 模块（Redis Stack），"
+                    + "请使用带搜索模块的 Redis，或设置 spring.ai.vectorstore.redis.initialize-schema=true 后重建索引";
+        }
+        if (message.contains("Connection refused") || message.contains("Unable to connect")) {
+            return "向量检索不可用：无法连接 Redis，请检查 Redis 是否已启动";
+        }
+        return "搜索文档失败: " + message;
     }
 
     /**
