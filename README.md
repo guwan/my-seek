@@ -129,3 +129,7 @@ pnpm typecheck               # 类型检查
 ```powershell
 powershell -ExecutionPolicy Bypass -File D:\git\my-seek\sh\create_chapters.ps1
 ```
+
+## 开源协议
+
+本项目采用 [MIT License](./LICENSE) 开源协议。
