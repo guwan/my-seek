@@ -50,6 +50,7 @@
 | `MAIL_HOST` / `MAIL_ACCOUNT` / `MAIL_TOKEN` | 邮件服务 | 空 |
 | `FILE_UPLOAD_PATH` | 知识库文档落盘目录 | `uploads/documents/` |
 | `CAPTCHA_KEY` / `CAPTCHA_TIMEOUT` | 验证码前缀与有效期（秒） | `captcha_` / `60` |
+| `CORS_ALLOWED_ORIGINS` | 允许跨域的前端来源，多个用逗号分隔，支持 `*` 通配本地端口 | `http://localhost:*,http://127.0.0.1:*` |
 
 ```powershell
 # PowerShell 示例
@@ -82,7 +83,8 @@ cd my-seek
 powershell -ExecutionPolicy Bypass -File .\start-local.ps1
 ```
 
-脚本会自动构建并以 `--spring.profiles.active=dev,local` 启动。本地专属配置和真实密码存放在
+脚本会自动构建并以 `--spring.profiles.active=dev,local` 启动，同时把控制台和 JVM 输出统一为 UTF-8，
+避免中文日志在 Windows 上乱码。本地专属配置和真实密码存放在
 `src/main/resources/application-local.yml`（同样已被 `.gitignore` 忽略）。
 
 ### 前端
@@ -142,7 +144,7 @@ pnpm typecheck               # 类型检查
 在 PowerShell 中执行 ，可以生成空白章节文件
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File D:\git\my-seek\sh\create_chapters.ps1
+powershell -ExecutionPolicy Bypass -File .\sh\create_chapters.ps1
 ```
 
 ## 开源协议

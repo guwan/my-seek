@@ -35,6 +35,7 @@ public class ResourceService {
         this.resourceRepository = resourceRepository;
     }
 
+    @Transactional
     public void add(MenuAddReq menuAddReq) {
 
         Resource resource = new Resource();
@@ -53,6 +54,7 @@ public class ResourceService {
         resourceRepository.deleteAllByIdIn(deleteReq.getIds());
     }
 
+    @Transactional
     public void update(MenuAddReq menuAddReq) {
         Resource resource = resourceRepository.getReferenceById(menuAddReq.getId());
         BeanUtils.copyProperties(menuAddReq, resource);
@@ -196,6 +198,7 @@ public class ResourceService {
         }
         return count;
     }
+    @Transactional
     public Resource copy(MenuQueryReq menuQueryReq) {
         Optional<Resource> resourceOptional = resourceRepository.findById(menuQueryReq.getId());
         if (resourceOptional.isEmpty()) {

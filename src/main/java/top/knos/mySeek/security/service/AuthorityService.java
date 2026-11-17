@@ -6,6 +6,7 @@ import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import top.knos.mySeek.common.MenuType;
@@ -60,6 +61,7 @@ public class AuthorityService {
             throw new IllegalArgumentException("该角色名已经存在");
     }
 
+    @Transactional
     public void update(RoleAddReq roleAddReq) {
         existRole(roleAddReq.getId());
         Assert.hasText(roleAddReq.getAuthority(), "角色不能为空");
@@ -116,6 +118,7 @@ public class AuthorityService {
         return allTreeConfigRes;
     }
 
+    @Transactional(readOnly = true)
     public SelectKeysRes queryRoleMenu(Integer id) {
         SelectKeysRes selectKeysRes = new SelectKeysRes();
 
@@ -129,6 +132,7 @@ public class AuthorityService {
         return selectKeysRes;
     }
 
+    @Transactional
     public void updateRoleMenu(TreeDataUpdateReq req) {
         Authority authority = authorityRepository.getReferenceById(req.getId());
 

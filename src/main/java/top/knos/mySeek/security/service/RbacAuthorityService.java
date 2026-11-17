@@ -1,15 +1,14 @@
 package top.knos.mySeek.security.service;
 
-import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
-import top.knos.mySeek.security.domain.Authority;
 
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -35,12 +34,9 @@ public class RbacAuthorityService {
             return true;
         }
         //需要满足角色条件才能访问，拿当前用户的角色去判断是不是符合角色条件。
-        if(CollectionUtils.isNotEmpty(authentication.getAuthorities())){
-            Collection<Authority> auths = (Collection<Authority>) authentication.getAuthorities();
-            for (Authority auth : auths) {
-                if(roles.contains(auth.getAuthority())){
-                    return true;
-                }
+        for (GrantedAuthority authority : authentication.getAuthorities()) {
+            if (roles.contains(authority.getAuthority())) {
+                return true;
             }
         }
         return false;
@@ -48,14 +44,14 @@ public class RbacAuthorityService {
 
     /**
      * 判断当前authentication 是否具有该请求对应的链接的权限
-     * 如果不具有权限，则抛出 JwtException
+     * 如果不具有权限，则抛出 AccessDeniedException（由 JWT 过滤器转成 403）
      * @param request
      * @param authentication
      */
     public void checkPermission(HttpServletRequest request, Authentication authentication) {
         boolean hasPermission  = hasPermission(request,authentication);
         if(!hasPermission){
-            throw new JwtException("您的角色没有被授权访问该链接。");
+            throw new AccessDeniedException("您的角色没有被授权访问该链接。");
         }
     }
 

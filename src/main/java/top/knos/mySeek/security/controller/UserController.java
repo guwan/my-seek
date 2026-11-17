@@ -3,9 +3,7 @@ package top.knos.mySeek.security.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import top.knos.mySeek.common.Result;
-import top.knos.mySeek.security.domain.User;
 import top.knos.mySeek.security.pojo.UserVo;
-import top.knos.mySeek.security.repository.UserRepository;
 import top.knos.mySeek.security.service.impl.UserService;
 import top.knos.mySeek.security.support.SecurityUtils;
 import top.knos.mySeek.security.vo.req.*;
@@ -27,8 +25,6 @@ import java.util.List;
 public class UserController {
     @Autowired
     private UserService userService;
-    @Autowired
-    private UserRepository userRepository;
 
     @PostMapping("updatePassword")
     public void updatePassword(@RequestBody PasswordUpdateReq passwordUpdateReq) {
@@ -57,12 +53,11 @@ public class UserController {
     @GetMapping("myMenu")
     public List<MenuRes> myMenu() {
 
-        User currentUser = SecurityUtils.getUser();
+        var currentUser = SecurityUtils.getUser();
         if (currentUser == null) {
             return new ArrayList<>(0);
         }
-        User user = userRepository.getReferenceById(currentUser.getId());
-        return userService.makeMenuTree(user);
+        return userService.myMenu(currentUser.getId());
     }
 
     @PostMapping("add")

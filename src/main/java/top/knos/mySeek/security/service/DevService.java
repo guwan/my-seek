@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.knos.mySeek.AppProfiles;
 import top.knos.mySeek.constant.AuthEnum;
 import top.knos.mySeek.security.domain.Authority;
@@ -29,6 +30,7 @@ public class DevService {
     @Autowired
     private AuthorityRepository authorityRepository;
 
+    @Transactional
     public void autoGenerateMenu(AutoGenerateMenuReq autoGenerateMenuReq) {
 
         //只有开发环境才推送允许执行

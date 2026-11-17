@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
@@ -24,6 +25,18 @@ import static top.knos.mySeek.config.SecurityConfig.PUBLIC;
 
 // We should use OncePerRequestFilter since we are doing a database call, there is no point in doing this more than once
 public class JwtTokenFilter extends OncePerRequestFilter {
+
+    /**
+     * 自助接口：只要求登录，不参与角色-资源映射校验。
+     * 这些接口只读取/修改当前登录用户自己的数据。
+     */
+    private static final String[] RBAC_EXCLUDED = new String[]{
+            "/api/user/currentUser",
+            "/api/user/myMenu",
+            "/api/user/logout",
+            "/api/user/updateUserBySelf",
+            "/api/user/updateAvatarBySelf",
+    };
 
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -56,13 +69,20 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             }
             if (jwtTokenProvider.validateToken(token)) {
                 Authentication auth = jwtTokenProvider.getAuthentication(token);
-                rbacAuthorityService.checkPermission(request, auth);
+                if (needRbacCheck(request)) {
+                    rbacAuthorityService.checkPermission(request, auth);
+                }
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }
         } catch (JwtException ex) {
             //this is very important, since it guarantees the user is not authenticated at all
             SecurityContextHolder.clearContext();
             writeError(response, HttpStatus.UNAUTHORIZED.value(), ex.getMessage());
+            return;
+        } catch (AccessDeniedException ex) {
+            // 角色权限不足：返回 403，不再伪装成未登录导致前端误清理 token
+            SecurityContextHolder.clearContext();
+            writeError(response, HttpStatus.FORBIDDEN.value(), ex.getMessage());
             return;
         } catch (TipsException ex) {
             //this is very important, since it guarantees the user is not authenticated at all
@@ -93,5 +113,10 @@ public class JwtTokenFilter extends OncePerRequestFilter {
                 .noneMatch(matcher ->
                         antPathMatcher.match(matcher,request.getRequestURI())
                 );
+    }
+
+    private boolean needRbacCheck(HttpServletRequest request) {
+        return Arrays.stream(RBAC_EXCLUDED)
+                .noneMatch(matcher -> antPathMatcher.match(matcher, request.getRequestURI()));
     }
 }

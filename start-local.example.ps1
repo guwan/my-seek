@@ -1,10 +1,15 @@
-# MySeek 本地启动脚本示例（不含真实凭据）
+﻿# MySeek 本地启动脚本示例（不含真实凭据）
 # 用法：
 #   1. 复制本文件为 start-local.ps1（该文件已被 .gitignore 忽略）
 #   2. 把下面的 DB_PASSWORD 改为本机数据库的真实密码
 #   3. 右键 -> 使用 PowerShell 运行，或执行：powershell -ExecutionPolicy Bypass -File .\start-local.ps1
 
 $ErrorActionPreference = 'Stop'
+
+# 统一 UTF-8：Java 18+ 默认用 UTF-8 输出日志，Windows 控制台也需切到 UTF-8 才能正确解码
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+chcp 65001 | Out-Null
 
 # ---- 请填写本机真实凭据 ----
 $env:DB_PASSWORD = 'change-me'
@@ -23,7 +28,7 @@ try {
     if (-not $jar) { throw '未找到可执行 jar' }
 
     Write-Host "使用 local 配置启动: $($jar.Name)" -ForegroundColor Green
-    & java -jar $jar.FullName '--spring.profiles.active=dev,local'
+    & java '-Dfile.encoding=UTF-8' '-Dstdout.encoding=UTF-8' '-Dstderr.encoding=UTF-8' -jar $jar.FullName '--spring.profiles.active=dev,local'
 }
 finally {
     Pop-Location

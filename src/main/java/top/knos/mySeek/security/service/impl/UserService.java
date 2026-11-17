@@ -1,6 +1,5 @@
 package top.knos.mySeek.security.service.impl;
 
-import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
@@ -17,6 +16,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.core.userdetails.cache.NullUserCache;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import top.knos.mySeek.exception.TipsException;
@@ -203,6 +203,7 @@ public class UserService implements UserDetailsManager {
         return user != null;
     }
 
+    @Transactional(readOnly = true)
     public String getNameById(Long id) {
         return userRepository.getReferenceById(id).getFullName();
     }
@@ -246,22 +247,11 @@ public class UserService implements UserDetailsManager {
         return "退出登录成功";
     }
 
-    public List<MenuRes> myMenu(User user) {
+    @Transactional(readOnly = true)
+    public List<MenuRes> myMenu(Long userId) {
+        // 在事务内创建代理并立即完成懒加载关联遍历，避免依赖 OSIV
+        User user = userRepository.getReferenceById(userId);
         return makeMenuTree(user);
-        /*Collection<Authority> authorities = user.getAuthorities();
-        List<Resource> resources = new ArrayList<>();
-        for (Authority authority : authorities) {
-            resources.addAll(authority.getResources());
-        }
-        //去重
-        resources = resources
-                .stream()
-                .filter(resource -> resource.getType().equals(1) && !resource.getDisabled())
-                .distinct()
-                .sorted(Comparator.comparing(Resource::getSort))
-                .collect(Collectors.toList());
-
-        return makeMenuTree(null, resources);*/
     }
 
     /**
@@ -271,7 +261,7 @@ public class UserService implements UserDetailsManager {
      * @return
      */
     //@Cacheable("user_menu_tree")
-    public List<MenuRes> makeMenuTree(User user) {
+    private List<MenuRes> makeMenuTree(User user) {
 
         Collection<Authority> authorities = user.getAuthorities();
         List<Resource> resources = new ArrayList<>();
@@ -490,6 +480,7 @@ public class UserService implements UserDetailsManager {
         MyAssert.hasLengthMax(user.getUsername(), username_length_max, String.format("用户名必须不超过%d字节", username_length_max));
     }
 
+    @Transactional(readOnly = true)
     public SelectKeysRes queryUserRole(Long id) {
         User user = userRepository.getReferenceById(id);
 
@@ -505,6 +496,7 @@ public class UserService implements UserDetailsManager {
         return treeConfigRes;
     }
 
+    @Transactional
     public void updateUserRole(TreeDataUpdateReq req) {
         User user = userRepository.getReferenceById(req.getId().longValue());
 
@@ -514,6 +506,7 @@ public class UserService implements UserDetailsManager {
         userRepository.save(user);
     }
 
+    @Transactional(readOnly = true)
     public SelectKeysRes queryUserDataOrg(Long id) {
         User user = userRepository.getReferenceById(id);
 
@@ -528,6 +521,7 @@ public class UserService implements UserDetailsManager {
         return treeConfigRes;
     }
 
+    @Transactional
     public void updateUserDataOrg(TreeDataUpdateReq treeDataUpdateReq) {
         User user = userRepository.getReferenceById(treeDataUpdateReq.getId().longValue());
 

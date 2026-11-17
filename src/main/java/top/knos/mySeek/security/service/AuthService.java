@@ -4,13 +4,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
 import top.knos.mySeek.common.Result;
 import top.knos.mySeek.exception.CustomHttpException;
 import top.knos.mySeek.security.JwtTokenProvider;
+import top.knos.mySeek.security.domain.User;
 import top.knos.mySeek.security.repository.AuthorityRepository;
-import top.knos.mySeek.security.repository.UserRepository;
 import top.knos.mySeek.security.service.impl.UserService;
 import top.knos.mySeek.security.support.UserCheck;
 import top.knos.mySeek.security.vo.req.LoginReq;
@@ -26,7 +27,6 @@ import top.knos.mySeek.utils.RedisCaptchaUtil;
 @Slf4j
 public class AuthService {
 
-    private final UserRepository userRepository;
     private final UserService userService;
     private final AuthorityRepository authorityRepository;
 
@@ -36,10 +36,8 @@ public class AuthService {
     private final UserCheck userCheck;
     private final RedisCaptchaUtil redisCaptchaUtil;
 
-    public AuthService(UserRepository userRepository,
-                       UserService userService,
+    public AuthService(UserService userService,
                        AuthorityRepository authorityRepository, AuthenticationManager authenticationManager, JwtTokenProvider jwtTokenProvider, UserCheck userCheck, RedisCaptchaUtil redisCaptchaUtil) {
-        this.userRepository = userRepository;
         this.userService = userService;
         this.authorityRepository = authorityRepository;
         this.authenticationManager = authenticationManager;
@@ -50,8 +48,11 @@ public class AuthService {
 
     public String login(String username, String password) {
         try {
-            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
-            return jwtTokenProvider.createToken(username, userRepository.findByUsername(username).getAuthorities());
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, password));
+            // loadUserByUsername 已在事务内初始化 authorities，这里直接复用认证主体，避免二次查询触发懒加载
+            User user = (User) authentication.getPrincipal();
+            return jwtTokenProvider.createToken(user.getUsername(), user.getAuthorities());
         } catch (AuthenticationException e) {
             //log.debug("登录失败：{}", ExceptionUtils.getStackTrace(e));
             throw new CustomHttpException(e.getMessage(), HttpStatus.UNPROCESSABLE_ENTITY);

@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 import top.knos.mySeek.security.domain.DataOrg;
@@ -52,6 +53,7 @@ public class DataOrgService {
             throw new IllegalArgumentException("该组织名已经存在");
     }
 
+    @Transactional
     public void update(DataOrgAddReq dataOrgAddReq) {
         existDataOrg(dataOrgAddReq.getId());
         Assert.hasText(dataOrgAddReq.getName(), "组织名不能为空");

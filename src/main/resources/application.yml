@@ -9,11 +9,10 @@ spring:
     virtual:
       enabled: true
 
-  # 说明：当前业务中存在较多对关联集合（如 authorities/resources/parent）的延迟加载访问，
-  # 关闭 open-in-view 会触发 LazyInitializationException，因此这里保持开启。
-  # 后续可通过 @EntityGraph / fetch join 逐步收敛后再关闭。
+  # 懒加载关联已在 Service 层通过 @Transactional / @EntityGraph 收敛，
+  # 不再开启 OSIV，避免 Session/数据库连接随整个请求（尤其 AI 流式接口）长期占用。
   jpa:
-    open-in-view: true
+    open-in-view: false
     properties:
       hibernate:
         jdbc:
@@ -101,6 +100,10 @@ mail:
     token: ${MAIL_TOKEN:}
     register:
       host: ${REGISTER_HOST:http://localhost:8080}
+
+app:
+  cors:
+    allowed-origins: "${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}"
 
 server:
   shutdown: graceful
