@@ -70,6 +70,21 @@ cd my-seek
 
 生成的可执行包位于 `build/libs/`。
 
+#### 本地私密配置（推荐）
+
+本地开发使用的真实数据库密码、JWT 密钥等敏感信息**不会提交到仓库**：
+
+1. 复制 `start-local.example.ps1` 为 `start-local.ps1`（该文件已被 `.gitignore` 忽略）
+2. 在 `start-local.ps1` 中填写本机的 `DB_PASSWORD`（及其它需要的凭据）
+3. 右键「使用 PowerShell 运行」，或执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-local.ps1
+```
+
+脚本会自动构建并以 `--spring.profiles.active=dev,local` 启动。本地专属配置和真实密码存放在
+`src/main/resources/application-local.yml`（同样已被 `.gitignore` 忽略）。
+
 ### 前端
 
 ```powershell

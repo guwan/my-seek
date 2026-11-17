@@ -41,3 +41,7 @@ logs/
 uploads/
 novel/
 *.log
+
+### 本地敏感配置与启动脚本（禁止提交真实凭据） ###
+src/main/resources/application-local.yml
+start-local.ps1
