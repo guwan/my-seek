@@ -39,12 +39,14 @@ public class ChatService {
     private final ChatClient chatClient;
     private final RedisChatMemory redisChatMemory;
     private final ModelProviderManager modelProviderManager;
+    private final WebSearchService webSearchService;
 
     public ChatService(ChatClient chatClient, RedisChatMemory redisChatMemory,
-                       ModelProviderManager modelProviderManager) {
+                       ModelProviderManager modelProviderManager, WebSearchService webSearchService) {
         this.chatClient = chatClient;
         this.redisChatMemory = redisChatMemory;
         this.modelProviderManager = modelProviderManager;
+        this.webSearchService = webSearchService;
     }
 
     private ChatClient getChatClient(String modelIdentifier) {
@@ -64,14 +66,23 @@ public class ChatService {
      * 构建带记忆 Advisor 的请求。会话 ID 已在请求上下文中声明，Advisor 会自动完成
      * 历史读取、用户消息写入与 AI 回复写入，避免重复写入。
      */
-    private ChatClient.ChatClientRequestSpec promptWithMemory(ChatClient client, String scopedConversationId, String userInput) {
-        return client.prompt()
-                .advisors(spec -> spec
+    private ChatClient.ChatClientRequestSpec promptWithMemory(ChatClient client, String scopedConversationId,
+                                                              String userInput, boolean webSearch) {
+        var spec = client.prompt()
+                .advisors(advisor -> advisor
                         .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory)
                                 .order(MEMORY_ADVISOR_ORDER)
                                 .build())
-                        .param(ChatMemory.CONVERSATION_ID, scopedConversationId))
-                .user(userInput);
+                        .param(ChatMemory.CONVERSATION_ID, scopedConversationId));
+
+        // 联网开启时，先检索实时资料作为 system 上下文注入
+        if (webSearch) {
+            String context = webSearchService.search(userInput);
+            if (context != null && !context.isBlank()) {
+                spec = spec.system(context);
+            }
+        }
+        return spec.user(userInput);
     }
 
     public String chat(ChatRequest request) {
@@ -80,7 +91,7 @@ public class ChatService {
 
         ChatClient clientToUse = getChatClient(request.getModel());
 
-        var response = promptWithMemory(clientToUse, scopedConversationId, userInput).call();
+        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, request.isWebSearch()).call();
 
         String aiReply = response.content();
         saveChatItem(request.getConversationId(), userInput);
@@ -93,7 +104,7 @@ public class ChatService {
 
         ChatClient clientToUse = getChatClient(request.getModel());
 
-        var response = promptWithMemory(clientToUse, scopedConversationId, userInput)
+        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, request.isWebSearch())
                 .stream()
                 .content();
 

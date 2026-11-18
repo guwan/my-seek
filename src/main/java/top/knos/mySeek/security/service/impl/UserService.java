@@ -89,7 +89,9 @@ public class UserService implements UserDetailsManager {
             throw new UsernameNotFoundException("用户不存在");
         }
         Collection<Authority> authorities = user.getAuthorities();//防止jpa延迟加载
-        log.debug("[{}]正在登录,拥有{}个角色", username, authorities.size());
+        // 该方法不只在登录时调用：JWT 鉴权对每个请求都会经此加载用户，
+        // 用 TRACE 级别避免正常访问刷屏（TRACE 默认不输出）。
+        log.trace("[{}]加载用户(鉴权),拥有{}个角色", username, authorities.size());
         return user;
     }
 

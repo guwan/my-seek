@@ -76,6 +76,16 @@ qwen:
   api-key: ${QWEN_API_KEY:}
   base-url: ${QWEN_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
 
+# 联网搜索配置（对话页可按需开启）
+web-search:
+  # provider: tavily（需 Key，质量高）或 wikipedia（免 Key 兜底）
+  provider: ${WEB_SEARCH_PROVIDER:tavily}
+  max-results: ${WEB_SEARCH_MAX_RESULTS:5}
+  tavily:
+    # 从 https://tavily.com 免费申请；为空时自动降级到 wikipedia
+    api-key: ${TAVILY_API_KEY:}
+    base-url: ${TAVILY_BASE_URL:https://api.tavily.com}
+
 # 文件上传配置
 file:
   upload:

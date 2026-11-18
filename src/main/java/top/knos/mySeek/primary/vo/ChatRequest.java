@@ -21,6 +21,11 @@ public class ChatRequest {
     @Size(max = 128, message = "model 长度不能超过 128")
     private String model;
 
+    /**
+     * 是否启用联网搜索。开启后会先检索实时资料并注入模型上下文。
+     */
+    private boolean webSearch = false;
+
     public ChatRequest() {
     }
 
