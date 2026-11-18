@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import top.knos.mySeek.support.vo.WebSearchResult;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -16,13 +17,13 @@ import java.util.List;
 /**
  * 联网搜索服务：为对话提供实时外部信息。
  *
- * <p>支持两种提供方，按优先级自动降级，且均使用 Spring Web 自带的 {@link RestClient}，
- * 无需新增任何依赖：</p>
+ * <p>支持两种提供方，按优先级自动降级，均使用 Spring Web 自带的 {@link RestClient}，
+ * 无需新增依赖：</p>
  * <ul>
  *   <li>tavily：AI 场景专用搜索，质量高，需配置 API Key（有免费额度）；</li>
  *   <li>wikipedia：免 Key 兜底，适合事实/百科类问题。</li>
  * </ul>
- * <p>任何异常都会被吞掉并返回空串，保证搜索失败时对话仍可正常进行。</p>
+ * <p>任何异常都会被吞掉并返回空结果，保证搜索失败时对话仍可正常进行。</p>
  */
 @Service
 @Slf4j
@@ -51,32 +52,32 @@ public class WebSearchService {
     }
 
     /**
-     * 搜索并整理为可直接注入 prompt 的参考资料文本。
-     *
-     * @return 参考资料文本；无结果或失败时返回空串
+     * 搜索并返回结构化结果：context 注入 prompt，sources 供前端展示。
      */
-    public String search(String query) {
+    public WebSearchResult search(String query) {
+        WebSearchResult result = new WebSearchResult();
         if (query == null || query.isBlank()) {
-            return "";
+            return result;
         }
         String trimmed = query.trim();
         try {
-            List<String> snippets = new ArrayList<>();
+            List<WebSearchResult.SearchSource> sources = new ArrayList<>();
             if ("tavily".equalsIgnoreCase(provider) && tavilyApiKey != null && !tavilyApiKey.isBlank()) {
-                snippets = searchTavily(trimmed);
+                sources = searchTavily(trimmed);
             }
-            if (snippets.isEmpty()) {
-                snippets = searchWikipedia(trimmed);
+            if (sources.isEmpty()) {
+                sources = searchWikipedia(trimmed);
             }
-            return toContext(snippets);
+            result.setSources(sources);
+            result.setContext(toContext(sources));
         } catch (Exception e) {
             log.warn("联网搜索失败，本次对话不使用外部资料: {}", e.getMessage());
-            return "";
         }
+        return result;
     }
 
     /** Tavily：POST JSON，返回 results[].title/content/url */
-    private List<String> searchTavily(String query) {
+    private List<WebSearchResult.SearchSource> searchTavily(String query) {
         String body = """
                 {"api_key":"%s","query":"%s","search_depth":"basic","max_results":%d,"include_answer":false}
                 """.formatted(escape(tavilyApiKey), escape(query), maxResults);
@@ -91,21 +92,25 @@ public class WebSearchService {
 
         JsonNode root = readJson(json);
         if (root == null) return List.of();
-        List<String> out = new ArrayList<>();
+        List<WebSearchResult.SearchSource> out = new ArrayList<>();
         JsonNode results = root.path("results");
         if (results.isArray()) {
             for (JsonNode item : results) {
                 String title = item.path("title").asText("");
-                String content = item.path("content").asText("");
                 String url = item.path("url").asText("");
-                out.add(String.format("【%s】%s（来源：%s）", title, content, url));
+                String content = item.path("content").asText("");
+                if (!title.isBlank() || !url.isBlank()) {
+                    out.add(new WebSearchResult.SearchSource(
+                            title.isBlank() ? url : title + (content.isBlank() ? "" : "：" + abbreviate(content)),
+                            url));
+                }
             }
         }
         return out;
     }
 
     /** Wikipedia：GET JSON，免 API Key，返回 query.search[].title/snippet */
-    private List<String> searchWikipedia(String query) {
+    private List<WebSearchResult.SearchSource> searchWikipedia(String query) {
         String url = "https://en.wikipedia.org/w/api.php"
                 + "?action=query&list=search&format=json&srlimit=" + maxResults
                 + "&srsearch=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
@@ -115,25 +120,29 @@ public class WebSearchService {
 
         JsonNode root = readJson(json);
         if (root == null) return List.of();
-        List<String> out = new ArrayList<>();
+        List<WebSearchResult.SearchSource> out = new ArrayList<>();
         JsonNode results = root.path("query").path("search");
         if (results.isArray()) {
             for (JsonNode item : results) {
                 String title = item.path("title").asText("");
                 String snippet = item.path("snippet").asText("").replaceAll("<[^>]+>", "");
-                out.add(String.format("【%s】%s（来源：Wikipedia）", title, snippet));
+                String pageUrl = "https://en.wikipedia.org/wiki/" + URLEncoder.encode(title.replace(' ', '_'), StandardCharsets.UTF_8);
+                out.add(new WebSearchResult.SearchSource(
+                        title + (snippet.isBlank() ? "" : "：" + abbreviate(snippet)),
+                        pageUrl));
             }
         }
         return out;
     }
 
     /** 拼接并截断，避免占用过多上下文窗口 */
-    private String toContext(List<String> snippets) {
-        if (snippets.isEmpty()) return "";
+    private String toContext(List<WebSearchResult.SearchSource> sources) {
+        if (sources.isEmpty()) return "";
         StringBuilder sb = new StringBuilder("以下是联网搜索到的实时资料，仅供参考，回答时请甄别其准确性：\n");
-        for (String s : snippets) {
-            if (sb.length() + s.length() > CONTEXT_MAX_CHARS) break;
-            sb.append("- ").append(s).append('\n');
+        for (WebSearchResult.SearchSource s : sources) {
+            String line = String.format("- %s（来源：%s）", s.getTitle(), s.getUrl());
+            if (sb.length() + line.length() > CONTEXT_MAX_CHARS) break;
+            sb.append(line).append('\n');
         }
         return sb.toString().trim();
     }
@@ -145,6 +154,11 @@ public class WebSearchService {
             log.warn("联网搜索结果解析失败: {}", e.getMessage());
             return null;
         }
+    }
+
+    private static String abbreviate(String s) {
+        String clean = s.replaceAll("\\s+", " ").trim();
+        return clean.length() > 120 ? clean.substring(0, 120) + "…" : clean;
     }
 
     private static String escape(String s) {

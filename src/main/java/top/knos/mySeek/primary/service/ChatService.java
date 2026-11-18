@@ -14,6 +14,7 @@ import top.knos.mySeek.primary.vo.ModelInfo;
 import top.knos.mySeek.security.domain.User;
 import top.knos.mySeek.security.support.SecurityUtils;
 import top.knos.mySeek.support.vo.ChatInfoVo;
+import top.knos.mySeek.support.vo.WebSearchResult;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -35,6 +36,9 @@ public class ChatService {
     private static final int TITLE_MAX_LENGTH = 100;
     /** 内存中保留的历史消息条数 */
     private static final int HISTORY_PAGE_SIZE = 50;
+    /** 流式首帧中携带联网来源的标记，前端据此解析并剔除该帧 */
+    public static final String SOURCES_FRAME_PREFIX = "\u0000MYSEEK_SOURCES:";
+    public static final String SOURCES_FRAME_SUFFIX = "\u0000\n";
 
     private final ChatClient chatClient;
     private final RedisChatMemory redisChatMemory;
@@ -67,7 +71,7 @@ public class ChatService {
      * 历史读取、用户消息写入与 AI 回复写入，避免重复写入。
      */
     private ChatClient.ChatClientRequestSpec promptWithMemory(ChatClient client, String scopedConversationId,
-                                                              String userInput, boolean webSearch) {
+                                                              String userInput, String searchContext) {
         var spec = client.prompt()
                 .advisors(advisor -> advisor
                         .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory)
@@ -75,12 +79,8 @@ public class ChatService {
                                 .build())
                         .param(ChatMemory.CONVERSATION_ID, scopedConversationId));
 
-        // 联网开启时，先检索实时资料作为 system 上下文注入
-        if (webSearch) {
-            String context = webSearchService.search(userInput);
-            if (context != null && !context.isBlank()) {
-                spec = spec.system(context);
-            }
+        if (searchContext != null && !searchContext.isBlank()) {
+            spec = spec.system(searchContext);
         }
         return spec.user(userInput);
     }
@@ -90,8 +90,10 @@ public class ChatService {
         String userInput = request.getMessage();
 
         ChatClient clientToUse = getChatClient(request.getModel());
+        WebSearchResult searchResult = request.isWebSearch()
+                ? webSearchService.search(userInput) : new WebSearchResult();
 
-        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, request.isWebSearch()).call();
+        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, searchResult.getContext()).call();
 
         String aiReply = response.content();
         saveChatItem(request.getConversationId(), userInput);
@@ -103,14 +105,16 @@ public class ChatService {
         String userInput = request.getMessage();
 
         ChatClient clientToUse = getChatClient(request.getModel());
+        WebSearchResult searchResult = request.isWebSearch()
+                ? webSearchService.search(userInput) : new WebSearchResult();
 
-        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, request.isWebSearch())
+        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, searchResult.getContext())
                 .stream()
                 .content();
 
         StringBuilder sb = new StringBuilder();
 
-        return response
+        Flux<String> contentFlux = response
                 .doOnNext(sb::append)
                 .doOnComplete(() -> {
                     log.debug("对话回复: {}", sb);
@@ -120,6 +124,13 @@ public class ChatService {
                 // 客户端中途断开时 Advisor 不会落库，此处补写已生成的部分内容
                 .doOnCancel(() -> persistPartialReply(scopedConversationId, sb))
                 .doOnError(e -> log.warn("流式对话异常: {}", e.getMessage()));
+
+        // 有联网来源时，首帧下发带标记的 JSON，前端解析后展示参考来源
+        if (searchResult.hasSources()) {
+            String frame = SOURCES_FRAME_PREFIX + searchResult.getSourcesJson() + SOURCES_FRAME_SUFFIX;
+            return Flux.concat(Flux.just(frame), contentFlux);
+        }
+        return contentFlux;
     }
 
     /**
