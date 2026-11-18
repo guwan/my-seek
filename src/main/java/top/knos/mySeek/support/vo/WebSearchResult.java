@@ -14,6 +14,10 @@ public class WebSearchResult {
 
     private String context = "";
     private List<SearchSource> sources = List.of();
+    /** 是否实际执行过搜索（用于前端提示"已联网搜索"） */
+    private boolean performed = false;
+    /** 实际使用的搜索引擎 */
+    private String engine = "";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -31,16 +35,24 @@ public class WebSearchResult {
         }
     }
 
-    /** 序列化来源列表为 JSON，供 ChatService 组装流式首帧 */
-    public String getSourcesJson() {
+    /** 序列化为流式首帧元数据，供前端展示联网状态与来源 */
+    public String getMetadataJson() {
         try {
-            return MAPPER.writeValueAsString(sources);
+            return MAPPER.writeValueAsString(new Metadata(performed, engine, sources));
         } catch (JsonProcessingException e) {
-            return "[]";
+            return "{\"performed\":false,\"sources\":[]}";
         }
+    }
+
+    /** 兼容旧方法名 */
+    public String getSourcesJson() {
+        return getMetadataJson();
     }
 
     public boolean hasSources() {
         return sources != null && !sources.isEmpty();
+    }
+
+    private record Metadata(boolean performed, String engine, List<SearchSource> sources) {
     }
 }

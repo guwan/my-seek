@@ -66,13 +66,25 @@ public class OllamaModelProvider implements ModelProvider {
 
     @Override
     public ChatClient createChatClient(String model) {
-        OllamaChatOptions options = OllamaChatOptions.builder()
-                .model(model)
-                .build();
+        return createChatClient(model, false);
+    }
+
+    /**
+     * 对混合思考模型（qwen3、deepseek-r1 等）下发 think 参数，
+     * 这样关闭时直接作答、开启时才会输出 <think> 推理过程。
+     */
+    @Override
+    public ChatClient createChatClient(String model, boolean enableThinking) {
+        var builder = OllamaChatOptions.builder().model(model);
+        if (enableThinking) {
+            builder.enableThinking();
+        } else {
+            builder.disableThinking();
+        }
 
         OllamaChatModel chatModel = OllamaChatModel.builder()
                 .ollamaApi(ollamaApi)
-                .options(options)
+                .options(builder.build())
                 .build();
 
         return ChatClient.builder(chatModel).build();

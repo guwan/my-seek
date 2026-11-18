@@ -53,13 +53,13 @@ public class ChatService {
         this.webSearchService = webSearchService;
     }
 
-    private ChatClient getChatClient(String modelIdentifier) {
+    private ChatClient getChatClient(String modelIdentifier, boolean enableThinking) {
         if (modelIdentifier == null || modelIdentifier.trim().isEmpty()) {
             return chatClient;
         }
 
         try {
-            return modelProviderManager.createChatClient(modelIdentifier);
+            return modelProviderManager.createChatClient(modelIdentifier, enableThinking);
         } catch (Exception e) {
             log.warn("无法创建指定模型的 ChatClient: {}, 使用默认客户端", modelIdentifier, e);
             return chatClient;
@@ -86,25 +86,29 @@ public class ChatService {
     }
 
     public String chat(ChatRequest request) {
-        String scopedConversationId = scopedConversationId(request.getConversationId());
+        String userScope = userScope();
+        String scopedConversationId = scopedConversationId(userScope, request.getConversationId());
         String userInput = request.getMessage();
 
-        ChatClient clientToUse = getChatClient(request.getModel());
+        ChatClient clientToUse = getChatClient(request.getModel(), request.isEnableThinking());
         WebSearchResult searchResult = request.isWebSearch()
                 ? webSearchService.search(userInput) : new WebSearchResult();
 
         var response = promptWithMemory(clientToUse, scopedConversationId, userInput, searchResult.getContext()).call();
 
         String aiReply = response.content();
-        saveChatItem(request.getConversationId(), userInput);
+        saveChatItem(userScope, request.getConversationId(), userInput);
         return aiReply;
     }
 
     public Flux<String> chatStream(ChatRequest request) {
-        String scopedConversationId = scopedConversationId(request.getConversationId());
+        // SecurityContext 是 ThreadLocal，流的完成/取消回调运行在 Reactor 线程上，
+        // 必须在请求线程同步取出用户作用域并在闭包中使用。
+        String userScope = userScope();
+        String scopedConversationId = scopedConversationId(userScope, request.getConversationId());
         String userInput = request.getMessage();
 
-        ChatClient clientToUse = getChatClient(request.getModel());
+        ChatClient clientToUse = getChatClient(request.getModel(), request.isEnableThinking());
         WebSearchResult searchResult = request.isWebSearch()
                 ? webSearchService.search(userInput) : new WebSearchResult();
 
@@ -119,15 +123,16 @@ public class ChatService {
                 .doOnComplete(() -> {
                     log.debug("对话回复: {}", sb);
                     // AI 回复由记忆 Advisor 自动落库，此处只需登记会话条目
-                    saveChatItem(request.getConversationId(), userInput);
+                    saveChatItem(userScope, request.getConversationId(), userInput);
                 })
                 // 客户端中途断开时 Advisor 不会落库，此处补写已生成的部分内容
                 .doOnCancel(() -> persistPartialReply(scopedConversationId, sb))
                 .doOnError(e -> log.warn("流式对话异常: {}", e.getMessage()));
 
-        // 有联网来源时，首帧下发带标记的 JSON，前端解析后展示参考来源
-        if (searchResult.hasSources()) {
-            String frame = SOURCES_FRAME_PREFIX + searchResult.getSourcesJson() + SOURCES_FRAME_SUFFIX;
+        // 开启联网时，首帧始终下发元数据（含 performed/engine/sources），
+        // 这样即使没有搜到结果，前端也能明确提示"已联网搜索"，而不是毫无反馈。
+        if (request.isWebSearch()) {
+            String frame = SOURCES_FRAME_PREFIX + searchResult.getMetadataJson() + SOURCES_FRAME_SUFFIX;
             return Flux.concat(Flux.just(frame), contentFlux);
         }
         return contentFlux;
@@ -149,7 +154,7 @@ public class ChatService {
     }
 
     public ChatInfoVo chatInfo(String conversationId) {
-        String scopedConversationId = scopedConversationId(conversationId);
+        String scopedConversationId = scopedConversationId(userScope(), conversationId);
         MessageVo message = redisChatMemory.getFirstOneVo(scopedConversationId);
         String text = message == null ? null : message.getContent();
         ChatInfoVo vo = new ChatInfoVo();
@@ -160,7 +165,7 @@ public class ChatService {
     }
 
     public List<MessageVo> history(String conversationId) {
-        return redisChatMemory.getVo(scopedConversationId(conversationId), HISTORY_PAGE_SIZE);
+        return redisChatMemory.getVo(scopedConversationId(userScope(), conversationId), HISTORY_PAGE_SIZE);
     }
 
     public List<ChatInfoVo> chatItemList() {
@@ -191,8 +196,8 @@ public class ChatService {
     /**
      * 会话 ID 按当前用户隔离，避免不同用户之间串会话。
      */
-    private String scopedConversationId(String conversationId) {
-        return userScope() + ":" + conversationId;
+    private String scopedConversationId(String userScope, String conversationId) {
+        return userScope + ":" + conversationId;
     }
 
     private String userScope() {
@@ -200,12 +205,12 @@ public class ChatService {
         return user == null || user.getId() == null ? "anonymous" : String.valueOf(user.getId());
     }
 
-    private void saveChatItem(String conversationId, String userInput) {
+    private void saveChatItem(String userScope, String conversationId, String userInput) {
         ChatInfoVo chatInfoVo = new ChatInfoVo();
         chatInfoVo.setId(conversationId);
         chatInfoVo.setTitle(userInput == null ? ""
                 : userInput.substring(0, Math.min(TITLE_MAX_LENGTH, userInput.length())));
         chatInfoVo.setCreateAt(new Date());
-        redisChatMemory.addChatItem(userScope(), chatInfoVo);
+        redisChatMemory.addChatItem(userScope, chatInfoVo);
     }
 }

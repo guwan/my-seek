@@ -1,5 +1,6 @@
 package top.knos.mySeek.security.support;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import top.knos.mySeek.constant.AuthEnum;
 import top.knos.mySeek.security.domain.Authority;
@@ -12,12 +13,13 @@ import java.util.Set;
 
 public class SecurityUtils {
     public static User getUser() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        User user = null;
-        if (!"anonymousUser".equals(principal)) {
-            user = (User) principal;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return null;
         }
-        return user;
+        Object principal = authentication.getPrincipal();
+        // 匿名/其他类型的 principal 一律视为未登录用户，避免 ClassCastException
+        return principal instanceof User user ? user : null;
     }
 
     public static String getAccess(Collection<Authority> auths) {
@@ -43,9 +45,8 @@ public class SecurityUtils {
 
     public static boolean currentIsAdmin() {
         User user = SecurityUtils.getUser();
-        return user
-                .getAuthorities()
-                .stream()
+        return user != null
+                && user.getAuthorities().stream()
                 .map(Authority::getAuthority)
                 .anyMatch(authority -> authority.equals(AuthEnum.ADMIN.getName()));
     }

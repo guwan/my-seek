@@ -1,36 +1,35 @@
 # MySeek
 
-#### Description
-为企事业内部提供的DeepSeek，允许添加自定义知识库，提供对话和接口功能。
+[![Java](https://img.shields.io/badge/Java-25-007396?logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.9-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-#### Software Architecture
-Software architecture description
+**MySeek** is a self-hosted AI chat platform for enterprises. It unifies local models, cloud LLMs, private knowledge bases and live web search behind one authenticated API.
 
-#### Installation
+> Web client: [my-seek-web](https://github.com/guwan/my-seek-web) · Website: [my-seek-page](https://github.com/guwan/my-seek-page) · Chinese docs: [README.md](./README.md)
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## Highlights
 
-#### Instructions
+- **Multi-model**: Ollama (DeepSeek, etc.), Doubao, Qwen and any OpenAI-compatible endpoint, switchable per request.
+- **Provider management**: add, edit, enable/disable third-party AI providers from the UI; API keys are encrypted at rest.
+- **RAG knowledge base**: upload documents, auto-parse and vectorize, then ask questions grounded in your own data (Redis Vector Store).
+- **Web search**: optional real-time search with Tavily (API key) and automatic Wikipedia fallback, with source links returned to the client.
+- **Secure by design**: JWT auth, captcha, per-user isolated chat memory and history; all secrets injected via environment variables.
+- **Streaming chat**: incremental SSE output with reasoning display and auto-generated conversation titles.
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## Quick start
 
-#### Contribution
+```bash
+# Backend (Java 25, MariaDB/MySQL, Redis)
+./gradlew bootRun
 
-1.  Fork the repository
-2.  Create Feat_xxx branch
-3.  Commit your code
-4.  Create Pull Request
+# Frontend (Node.js 22+, pnpm)
+cd ../my-seek-web
+pnpm install && pnpm dev
+```
 
+See [README.md](./README.md) for the full environment-variable reference, API list and deployment notes.
 
-#### Gitee Feature
+## License
 
-1.  You can use Readme\_XXX.md to support different languages, such as Readme\_en.md, Readme\_zh.md
-2.  Gitee blog [blog.gitee.com](https://blog.gitee.com)
-3.  Explore open source project [https://gitee.com/explore](https://gitee.com/explore)
-4.  The most valuable open source project [GVP](https://gitee.com/gvp)
-5.  The manual of Gitee [https://gitee.com/help](https://gitee.com/help)
-6.  The most popular members  [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+[MIT](./LICENSE)

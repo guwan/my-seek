@@ -1,6 +1,40 @@
 # MySeek
 
-为企事业内部提供的 DeepSeek 接入层，支持自定义知识库（RAG）、多模型（本地 Ollama / 豆包 / 千问）对话与统一鉴权。
+[![Java](https://img.shields.io/badge/Java-25-007396?logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.9-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.2-6DB33F)](https://spring.io/projects/spring-ai)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/guwan/my-seek?style=social)](https://github.com/guwan/my-seek)
+
+**MySeek** 是一套面向企事业内部的私有化 AI 对话工作台后端。它把本地模型、云端大模型、企业知识库与实时联网搜索整合到统一的 API 之下，提供开箱即用的鉴权、会话隔离和可视化模型供应商管理。
+
+> Web 工作台：[my-seek-web](https://github.com/guwan/my-seek-web) · 官方宣传站：[my-seek-page](https://github.com/guwan/my-seek-page)
+
+---
+
+## 核心能力
+
+- **多模型统一接入**：本地 Ollama（DeepSeek 等）、豆包、千问，以及任意 OpenAI 兼容接口，运行时按请求动态切换。
+- **可视化供应商管理**：新增 / 编辑 / 启停第三方 AI 接口，API Key 加密入库并支持连通性测试，改完即刻生效，无需改配置重启。
+- **联网搜索增强**：对话可按需开启实时搜索，Tavily（需 Key）优先、Wikipedia 免 Key 自动降级，检索结果注入上下文并把来源链接回传前端。
+- **RAG 知识库**：文档上传自动解析与向量化，基于 Redis Vector Store 做检索增强问答，支持分页管理与按 `document_id` 删除向量。
+- **安全与隔离**：JWT 鉴权 + 图形验证码，聊天记忆与会话列表按用户隔离；敏感配置一律通过环境变量注入。
+- **流式对话**：SSE 逐字输出，会话标题自动生成，支持按时间分组与推理过程展示。
+- **工程化**：虚拟线程提升 IO 并发、优雅停机、统一全局异常处理、13 个无需数据库 / Redis 即可运行的单元测试。
+
+## 项目组成
+
+| 仓库 | 说明 | 主要技术 |
+| --- | --- | --- |
+| [guwan/my-seek](https://github.com/guwan/my-seek) | 后端服务：鉴权、对话、知识库、联网搜索、供应商管理 | Java 25 / Spring Boot 4 / Spring AI 2 |
+| [guwan/my-seek-web](https://github.com/guwan/my-seek-web) | Web 对话工作台：多模型聊天、会话管理、写作助手 | React 19 / React Router 7 / Redux Toolkit |
+| [guwan/my-seek-page](https://github.com/guwan/my-seek-page) | 官方宣传站：产品介绍、特性、文档入口 | Vite 6 / React 19 / Tailwind CSS 4 |
+
+## 界面预览
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/guwan/my-seek-web/main/assets/image.png" alt="MySeek Web 聊天界面" width="920" />
+</p>
 
 ---
 
@@ -13,6 +47,7 @@
 | ORM | Spring Data JPA / Hibernate | 随 Boot 4.0.9 |
 | 序列化 | Jackson | 3.x（Spring Boot 4 默认） |
 | 安全 | Spring Security + JJWT | 7.x / 0.13.0 |
+| 向量存储 | Redis Vector Store（RediSearch） | 随 Spring AI |
 | 构建 | Gradle | 9.9.1（wrapper 已内置） |
 | JDK | Java | 25（toolchain 自动解析） |
 | 前端 | React + React Router | 19.3.1 / 7.18.5 |
@@ -34,19 +69,21 @@
 > 1. Redis 必须带 RediSearch 模块（Redis Stack），普通 Redis 执行 `FT.*` 会失败；
 > 2. 本地 Ollama 需安装嵌入模型：`ollama pull nomic-embed-text`（可用 `OLLAMA_EMBEDDING_MODEL` 覆盖）。
 
-
 ## 关键环境变量
 
-所有敏感配置均通过环境变量注入，不再硬编码在配置文件里。
+所有敏感配置均通过环境变量注入，不硬编码在配置文件里。
 
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
-| `JWT_SECRET_KEY` | JWT 签名密钥，至少 32 字节；**生产环境未配置时启动即失败**，开发环境会自动生成临时密钥 | 无（prod 必填） |
+| `JWT_SECRET_KEY` | JWT 签名密钥，至少 32 字节；**生产环境未配置时启动即失败**，开发环境自动生成临时密钥 | 无（prod 必填） |
+| `AI_PROVIDER_SECRET` | 加密保存供应商 API Key 的密钥；**生产环境务必覆盖** | 仅开发默认值 |
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 数据库连接 | `jdbc:mariadb://localhost:3306/seek` / `root` / 空 |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Redis 连接 | `localhost` / `6379` / 空 |
 | `DOUBAO_API_KEY` / `DOUBAO_BASE_URL` | 豆包模型 | 空 / 火山方舟地址 |
 | `QWEN_API_KEY` / `QWEN_BASE_URL` | 千问模型 | 空 / DashScope 兼容地址 |
 | `OLLAMA_BASE_URL` / `OLLAMA_CHAT_MODEL` | 本地模型 | `http://localhost:11434` / `deepseek-r1:8b` |
+| `WEB_SEARCH_PROVIDER` / `TAVILY_API_KEY` / `TAVILY_BASE_URL` | 联网搜索：provider 取 `tavily` 或 `wikipedia`，Key 为空自动降级 | `tavily` / 空 / Tavily 地址 |
+| `WEB_SEARCH_MAX_RESULTS` | 单次联网搜索返回条数 | `5` |
 | `MAIL_HOST` / `MAIL_ACCOUNT` / `MAIL_TOKEN` | 邮件服务 | 空 |
 | `FILE_UPLOAD_PATH` | 知识库文档落盘目录 | `uploads/documents/` |
 | `CAPTCHA_KEY` / `CAPTCHA_TIMEOUT` | 验证码前缀与有效期（秒） | `captcha_` / `60` |
@@ -54,9 +91,11 @@
 
 ```powershell
 # PowerShell 示例
-$env:JWT_SECRET_KEY = "please-change-me-to-a-random-32-byte-secret"
-$env:DB_PASSWORD   = "your-db-password"
-$env:DOUBAO_API_KEY = "your-doubao-key"
+$env:JWT_SECRET_KEY   = "please-change-me-to-a-random-32-byte-secret"
+$env:AI_PROVIDER_SECRET = "another-random-32-byte-secret"
+$env:DB_PASSWORD      = "your-db-password"
+$env:DOUBAO_API_KEY   = "your-doubao-key"
+$env:TAVILY_API_KEY   = "your-tavily-key"
 ```
 
 ## 构建与运行
@@ -83,9 +122,7 @@ cd my-seek
 powershell -ExecutionPolicy Bypass -File .\start-local.ps1
 ```
 
-脚本会自动构建并以 `--spring.profiles.active=dev,local` 启动，同时把控制台和 JVM 输出统一为 UTF-8，
-避免中文日志在 Windows 上乱码。本地专属配置和真实密码存放在
-`src/main/resources/application-local.yml`（同样已被 `.gitignore` 忽略）。
+脚本会自动构建并以 `--spring.profiles.active=dev,local` 启动，同时把控制台和 JVM 输出统一为 UTF-8，避免中文日志在 Windows 上乱码。本地专属配置和真实密码存放在 `src/main/resources/application-local.yml`（同样已被 `.gitignore` 忽略）。
 
 ### 前端
 
@@ -100,7 +137,7 @@ pnpm typecheck               # 类型检查
 ## 鉴权说明
 
 - 免鉴权路径：`/api/auth/**`、`/api/open/**`
-- 其余 `/api/**`（含 `/api/ai/**` 聊天接口）均需携带 `Authorization: Bearer <token>`
+- 其余 `/api/**`（含 `/api/ai/**` 聊天接口、供应商管理）均需携带 `Authorization: Bearer <token>`
 - 会话按用户隔离：聊天记忆的 Redis key 会拼接当前用户 ID，避免跨用户串会话
 - `/actuator/health` 公开，其余 actuator 端点需登录
 
@@ -109,12 +146,18 @@ pnpm typecheck               # 类型检查
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | POST | `/api/auth/login` | 登录（图形验证码） |
-| POST | `/api/ai/chat` | 同步对话 |
-| POST | `/api/ai/chat/stream` | 流式对话（增量文本） |
+| POST | `/api/ai/chat` | 同步对话（可携带联网搜索开关） |
+| POST | `/api/ai/chat/stream` | 流式对话（增量文本 / 推理过程） |
 | GET | `/api/ai/chat/history` | 会话历史消息 |
 | GET | `/api/ai/chat/info` | 会话摘要（标题） |
 | GET | `/api/ai/chat/item/list` | 当前用户的会话列表 |
 | GET | `/api/ai/models` | 可用模型列表 |
+| GET | `/api/ai/providers` | 第三方模型供应商列表 |
+| POST | `/api/ai/providers` | 新增供应商（API Key 加密保存） |
+| PUT | `/api/ai/providers/{id}` | 更新供应商 |
+| DELETE | `/api/ai/providers/{id}` | 删除供应商 |
+| PATCH | `/api/ai/providers/{id}/toggle?enabled=` | 启停供应商 |
+| POST | `/api/ai/providers/test` | 测试接口连通性 |
 | POST | `/api/knowledge/upload` | 上传知识库文档（自动解析 + 向量化） |
 | POST | `/api/knowledge/query` | 知识库问答（RAG） |
 
@@ -124,24 +167,19 @@ pnpm typecheck               # 类型检查
 { "success": true, "code": 200, "msg": null, "data": {} }
 ```
 
-## 升级说明（本次改动）
+## 最近更新
 
+- 新增第三方 AI 供应商管理：可视化增删启停、API Key 加密入库、连通性测试；模型选择改为运行时从配置动态解析
+- 新增联网搜索：Tavily 优先、Wikipedia 自动降级，结果注入上下文并回传来源
 - 构建链：Gradle 8.14.3 → 9.9.1，JDK toolchain 21 → 25
-- Spring Boot 4.0.5 → 4.0.9，Spring AI 2.0.0-M4 → 2.0.2 GA
-  - 记忆 Advisor 改为按请求注入会话 ID（`ChatMemory.CONVERSATION_ID`），修复用户消息/AI 回复重复落库
-  - OpenAI 兼容模型（豆包 / 千问）改用官方 `openai-java` SDK
-- Jackson 2 → Jackson 3：全部序列化器切换为 `GenericJacksonJsonRedisSerializer` / `JacksonJsonRedisSerializer`
-- JJWT 0.11.5 → 0.13.0：改为 `Jwts.SIG.HS256` + `Keys.hmacShaKeyFor`，密钥缺失时启动即失败
-- Tika 2.9.1 → 4.2.0：改用 `TikaInputStream`，并限制单文档最大解析长度
-- 修复 `EncryptUtil` 随机密钥导致「加密后无法解密」的缺陷（AES/CBC + 随机 IV + SHA-256 派生密钥）
-- 新增统一全局异常处理，`Result.unauthorized()` 不再返回 `success=true`
-- 聊天记忆 / 会话列表按用户隔离，`/api/ai/**` 需要登录
-- 知识库文档列表改分页查询，新增 `document_id` 元数据过滤删除向量
-- 新增 13 个单元测试（无需数据库/Redis 即可运行）
+- Spring Boot 4.0.5 → 4.0.9，Spring AI 2.0.0-M4 → 2.0.2 GA；OpenAI 兼容模型改用官方 `openai-java` SDK
+- Jackson 2 → 3、JJWT 0.11.5 → 0.13.0、Tika 2.9.1 → 4.2.0 全面适配
+- 修复 `EncryptUtil` 随机密钥导致「加密后无法解密」的缺陷；新增统一全局异常处理
+- 聊天记忆 / 会话列表按用户隔离；知识库文档列表分页 + `document_id` 元数据过滤删除
 
 ## 其它
 
-在 PowerShell 中执行 ，可以生成空白章节文件
+在 PowerShell 中执行以下命令，可以生成空白章节文件：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\sh\create_chapters.ps1

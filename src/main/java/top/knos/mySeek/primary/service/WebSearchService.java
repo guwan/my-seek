@@ -17,13 +17,12 @@ import java.util.List;
 /**
  * 联网搜索服务：为对话提供实时外部信息。
  *
- * <p>支持两种提供方，按优先级自动降级，均使用 Spring Web 自带的 {@link RestClient}，
- * 无需新增依赖：</p>
- * <ul>
+ * <p>搜索源按优先级自动降级，均使用 Spring Web 自带的 {@link RestClient}，无需新增依赖：</p>
+ * <ol>
  *   <li>tavily：AI 场景专用搜索，质量高，需配置 API Key（有免费额度）；</li>
- *   <li>wikipedia：免 Key 兜底，适合事实/百科类问题。</li>
- * </ul>
- * <p>任何异常都会被吞掉并返回空结果，保证搜索失败时对话仍可正常进行。</p>
+ *   <li>Wikipedia：免 Key 兜底，会根据查询语言自动选择中文/英文站点。</li>
+ * </ol>
+ * <p>任何异常都会被吞掉，但会保留 performed 标记，让前端能明确提示"已尝试联网搜索"。</p>
  */
 @Service
 @Slf4j
@@ -52,7 +51,7 @@ public class WebSearchService {
     }
 
     /**
-     * 搜索并返回结构化结果：context 注入 prompt，sources 供前端展示。
+     * 搜索并返回结构化结果：context 注入 prompt，sources 供前端展示，performed 供前端提示。
      */
     public WebSearchResult search(String query) {
         WebSearchResult result = new WebSearchResult();
@@ -60,18 +59,28 @@ public class WebSearchService {
             return result;
         }
         String trimmed = query.trim();
+        result.setPerformed(true);
         try {
             List<WebSearchResult.SearchSource> sources = new ArrayList<>();
             if ("tavily".equalsIgnoreCase(provider) && tavilyApiKey != null && !tavilyApiKey.isBlank()) {
                 sources = searchTavily(trimmed);
+                if (!sources.isEmpty()) result.setEngine("Tavily");
             }
+            // Tavily 未配置或无结果时降级到 Wikipedia，按查询语言选择中文/英文站
             if (sources.isEmpty()) {
-                sources = searchWikipedia(trimmed);
+                sources = searchWikipedia(trimmed, containsChinese(trimmed));
+                if (!sources.isEmpty()) {
+                    result.setEngine(containsChinese(trimmed) ? "Wikipedia 中文" : "Wikipedia");
+                }
             }
             result.setSources(sources);
             result.setContext(toContext(sources));
+            if (result.getEngine().isEmpty()) {
+                result.setEngine("无可用结果");
+            }
         } catch (Exception e) {
             log.warn("联网搜索失败，本次对话不使用外部资料: {}", e.getMessage());
+            result.setEngine("搜索失败");
         }
         return result;
     }
@@ -109,9 +118,10 @@ public class WebSearchService {
         return out;
     }
 
-    /** Wikipedia：GET JSON，免 API Key，返回 query.search[].title/snippet */
-    private List<WebSearchResult.SearchSource> searchWikipedia(String query) {
-        String url = "https://en.wikipedia.org/w/api.php"
+    /** Wikipedia：GET JSON，免 API Key，根据语言选择中文或英文站点 */
+    private List<WebSearchResult.SearchSource> searchWikipedia(String query, boolean chinese) {
+        String host = chinese ? "https://zh.wikipedia.org" : "https://en.wikipedia.org";
+        String url = host + "/w/api.php"
                 + "?action=query&list=search&format=json&srlimit=" + maxResults
                 + "&srsearch=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
 
@@ -126,7 +136,7 @@ public class WebSearchService {
             for (JsonNode item : results) {
                 String title = item.path("title").asText("");
                 String snippet = item.path("snippet").asText("").replaceAll("<[^>]+>", "");
-                String pageUrl = "https://en.wikipedia.org/wiki/" + URLEncoder.encode(title.replace(' ', '_'), StandardCharsets.UTF_8);
+                String pageUrl = host + "/wiki/" + URLEncoder.encode(title.replace(' ', '_'), StandardCharsets.UTF_8);
                 out.add(new WebSearchResult.SearchSource(
                         title + (snippet.isBlank() ? "" : "：" + abbreviate(snippet)),
                         pageUrl));
@@ -154,6 +164,14 @@ public class WebSearchService {
             log.warn("联网搜索结果解析失败: {}", e.getMessage());
             return null;
         }
+    }
+
+    private static boolean containsChinese(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 0x4e00 && c <= 0x9fff) return true;
+        }
+        return false;
     }
 
     private static String abbreviate(String s) {

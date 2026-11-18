@@ -26,6 +26,12 @@ public class ChatRequest {
      */
     private boolean webSearch = false;
 
+    /**
+     * 是否开启模型深度思考。对混合思考模型（如 qwen3）会下发 think 参数；
+     * 关闭时模型直接作答、不产生推理过程。
+     */
+    private boolean enableThinking = false;
+
     public ChatRequest() {
     }
 

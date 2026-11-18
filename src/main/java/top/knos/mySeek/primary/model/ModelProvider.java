@@ -23,6 +23,14 @@ public interface ModelProvider {
      * 创建 ChatClient
      */
     ChatClient createChatClient(String model);
+
+    /**
+     * 创建 ChatClient，并指定是否开启模型深度思考。
+     * 默认忽略该参数，由支持的提供者（如 Ollama）覆盖实现。
+     */
+    default ChatClient createChatClient(String model, boolean enableThinking) {
+        return createChatClient(model);
+    }
     
     /**
      * 是否支持流式响应
