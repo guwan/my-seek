@@ -139,6 +139,7 @@ pnpm typecheck               # 类型检查
 - 免鉴权路径：`/api/auth/**`、`/api/open/**`
 - 其余 `/api/**`（含 `/api/ai/**` 聊天接口、供应商管理）均需携带 `Authorization: Bearer <token>`
 - 会话按用户隔离：聊天记忆的 Redis key 会拼接当前用户 ID，避免跨用户串会话
+- 用户管理接口（`/api/user/add`、`/delete`、`/update`、`/query`、角色/组织维护等）需管理员；普通用户返回 403
 - `/actuator/health` 公开，其余 actuator 端点需登录
 
 ## 主要接口

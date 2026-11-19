@@ -393,6 +393,8 @@ public class UserService implements UserDetailsManager {
             UserQueryRes userQueryRes = new UserQueryRes();
             BeanUtils.copyProperties(u, userQueryRes);
             userQueryRes.setId(u.getId());
+            userQueryRes.setUsername(u.getUsername());
+            userQueryRes.setEnabled(u.getEnabled());
             String access = SecurityUtils.getAccess(u.getAuthorities());
             userQueryRes.setAccess(access);
             return userQueryRes;
@@ -414,6 +416,7 @@ public class UserService implements UserDetailsManager {
             data.setId(a.getId());
             data.setTitle(a.getName());
             data.setKey(data.getId());
+            data.setAuthority(a.getAuthority());
             return data;
         }).collect(Collectors.toList());
 

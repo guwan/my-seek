@@ -17,6 +17,7 @@ import top.knos.mySeek.security.domain.User;
 public class UserQueryRes {
     private Long id;
     private String name;
+    private String username;
     private String avatar;
     private String userid;
     private String email;
@@ -27,6 +28,7 @@ public class UserQueryRes {
     private Integer unreadCount;
     private String country;
     private String access;
+    private Boolean enabled;
     private String address;
     private String phone;
     private String homeUrl;

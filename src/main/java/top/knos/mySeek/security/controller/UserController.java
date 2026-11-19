@@ -1,6 +1,7 @@
 package top.knos.mySeek.security.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 import top.knos.mySeek.common.Result;
 import top.knos.mySeek.security.pojo.UserVo;
@@ -25,6 +26,13 @@ import java.util.List;
 public class UserController {
     @Autowired
     private UserService userService;
+
+    /** 用户管理接口统一要求管理员，避免仅依赖数据库资源配置。 */
+    private void requireAdmin() {
+        if (!SecurityUtils.currentIsAdmin()) {
+            throw new AccessDeniedException("仅管理员可管理用户");
+        }
+    }
 
     @PostMapping("updatePassword")
     public void updatePassword(@RequestBody PasswordUpdateReq passwordUpdateReq) {
@@ -62,57 +70,67 @@ public class UserController {
 
     @PostMapping("add")
     public Result<Object> add(@RequestBody UserAddReq userAddReq)  {
+        requireAdmin();
         userService.add(userAddReq);
         return Result.ok();
     }
 
     @PostMapping("delete")
     public Result<Object> delete(@RequestBody DeleteReq deleteReq) {
+        requireAdmin();
         userService.delete(deleteReq);
         return Result.ok();
     }
 
     @PostMapping("update")
     public Result<Object> update(@RequestBody UserAddReq userAddReq) {
+        requireAdmin();
         userService.update(userAddReq);
         return Result.ok();
     }
 
     @PostMapping("query")
     public PageVo<UserQueryRes> queryUser(@RequestBody UserQueryReq userQueryReq)  {
+        requireAdmin();
         return userService.queryUser(userQueryReq);
     }
 
     @PostMapping("queryAllRole")
     public Result<AllTreeConfigRes> queryAllRole() {
+        requireAdmin();
         AllTreeConfigRes res = userService.queryAllRole();
         return Result.ok(res);
     }
 
     @PostMapping("queryUserRole")
     public Result<SelectKeysRes> queryUserRole(@RequestParam Long id)  {
+        requireAdmin();
         SelectKeysRes res = userService.queryUserRole(id);
         return Result.ok(res);
     }
     @PostMapping("queryAllDataOrg")
     public Result<AllTreeConfigRes> queryAllDataOrg()  {
+        requireAdmin();
         AllTreeConfigRes res = userService.queryAllDataOrg();
         return Result.ok(res);
     }
     @PostMapping("queryUserDataOrg")
     public Result<SelectKeysRes> queryUserDataOrg(@RequestParam Long id)  {
+        requireAdmin();
         SelectKeysRes res = userService.queryUserDataOrg(id);
         return Result.ok(res);
     }
 
     @PostMapping("updateUserRole")
     public Result<Object> updateUserRole(@RequestBody TreeDataUpdateReq treeDataUpdateReq) throws NoSuchMethodException, InstantiationException, IllegalAccessException, InvocationTargetException {
+        requireAdmin();
         userService.updateUserRole(treeDataUpdateReq);
         return Result.ok();
     }
 
     @PostMapping("updateUserDataOrg")
     public Result<Object> updateUserDataOrg(@RequestBody TreeDataUpdateReq treeDataUpdateReq) throws InstantiationException, IllegalAccessException, InvocationTargetException {
+        requireAdmin();
         userService.updateUserDataOrg(treeDataUpdateReq);
         return Result.ok();
     }
@@ -137,6 +155,7 @@ public class UserController {
      */
     @PostMapping(value = "queryUserSelect")
     public Result<List<UserQueryRes>> queryUserSelect(@RequestBody PageKeyWords keyWords) {
+        requireAdmin();
         return Result.ok(userService.queryUserSelect(keyWords));
     }
 }
