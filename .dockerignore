@@ -1,0 +1,9 @@
+.git
+.gradle
+build
+uploads
+doc
+*.log
+.idea
+start-local.ps1
+start-local.example.ps1

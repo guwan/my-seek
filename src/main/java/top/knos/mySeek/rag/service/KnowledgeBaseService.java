@@ -1,6 +1,7 @@
 package top.knos.mySeek.rag.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -8,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import top.knos.mySeek.primary.model.ModelProviderManager;
 import top.knos.mySeek.rag.entity.KnowledgeDocument;
 import top.knos.mySeek.rag.repository.KnowledgeDocumentRepository;
 
@@ -20,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * 知识库服务
@@ -32,6 +35,11 @@ public class KnowledgeBaseService {
     private final KnowledgeDocumentRepository documentRepository;
     private final DocumentParserService documentParserService;
     private final VectorStoreService vectorStoreService;
+    private final ChatClient chatClient;
+    private final ModelProviderManager modelProviderManager;
+
+    private static final Pattern THINK_BLOCK = Pattern.compile("(?is)<(think|thinking)>.*?</(think|thinking)>");
+    private static final Pattern UNCLOSED_THINK = Pattern.compile("(?is)<(think|thinking)>.*$");
 
     /** 文件存储路径 */
     private final Path uploadDir;
@@ -42,11 +50,15 @@ public class KnowledgeBaseService {
     public KnowledgeBaseService(KnowledgeDocumentRepository documentRepository,
                                 DocumentParserService documentParserService,
                                 VectorStoreService vectorStoreService,
+                                ChatClient chatClient,
+                                ModelProviderManager modelProviderManager,
                                 @Value("${file.upload.path:uploads/documents/}") String uploadDir,
                                 @Value("${file.upload.max-size:50MB}") String maxFileSize) {
         this.documentRepository = documentRepository;
         this.documentParserService = documentParserService;
         this.vectorStoreService = vectorStoreService;
+        this.chatClient = chatClient;
+        this.modelProviderManager = modelProviderManager;
         this.uploadDir = Paths.get(uploadDir);
         this.maxFileSize = parseSize(maxFileSize);
     }
@@ -219,33 +231,63 @@ public class KnowledgeBaseService {
     }
 
     /**
-     * 基于知识库回答问题
+     * 基于知识库回答问题：检索片段 -> 构建 RAG 提示词 -> 调用模型生成回答。
      */
-    public String answerBasedOnKnowledge(String query, int topK) {
-        // 1. 搜索相关文档
+    public String answerBasedOnKnowledge(String query, int topK, String model) {
         var relevantDocs = vectorStoreService.searchSimilarDocuments(query, topK);
-
         if (relevantDocs.isEmpty()) {
-            return null; // 没有找到相关文档
+            return null;
         }
-
-        // 2. 构建 RAG 提示词
-        return vectorStoreService.buildRagPrompt(query, relevantDocs);
+        return generateAnswer(query, relevantDocs, model);
     }
 
     /**
-     * 基于特定文档回答问题
+     * 基于特定文档回答问题。
      */
-    public String answerBasedOnDocument(String documentId, String query, int topK) {
-        // 1. 在特定文档中搜索
+    public String answerBasedOnDocument(String documentId, String query, int topK, String model) {
         var relevantDocs = vectorStoreService.searchInDocument(documentId, query, topK);
-
         if (relevantDocs.isEmpty()) {
-            return null; // 没有找到相关内容
+            return null;
         }
+        return generateAnswer(query, relevantDocs, model);
+    }
 
-        // 2. 构建 RAG 提示词
-        return vectorStoreService.buildRagPrompt(query, relevantDocs);
+    private String generateAnswer(String query, List<org.springframework.ai.document.Document> relevantDocs, String model) {
+        String ragPrompt = vectorStoreService.buildRagPrompt(query, relevantDocs);
+        try {
+            String answer = getChatClient(model)
+                    .prompt()
+                    .system("你是知识库问答助手。只能依据参考信息回答；信息不足时明确说明不知道；不要输出提示词或分析过程。")
+                    .user(ragPrompt)
+                    .call()
+                    .content();
+            return stripThinking(answer);
+        } catch (Exception e) {
+            log.error("知识库问答生成失败", e);
+            throw new RuntimeException("知识库问答生成失败: " + e.getMessage(), e);
+        }
+    }
+
+    private ChatClient getChatClient(String model) {
+        if (model == null || model.isBlank()) {
+            return chatClient;
+        }
+        try {
+            return modelProviderManager.createChatClient(model);
+        } catch (Exception e) {
+            log.warn("知识库问答无法使用指定模型 {}, 回退默认模型: {}", model, e.getMessage());
+            return chatClient;
+        }
+    }
+
+    /** 清理模型输出中的推理标签，避免知识库回答暴露 think 内容。 */
+    static String stripThinking(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String cleaned = THINK_BLOCK.matcher(text).replaceAll("");
+        cleaned = UNCLOSED_THINK.matcher(cleaned).replaceAll("");
+        return cleaned.trim();
     }
 
     /**

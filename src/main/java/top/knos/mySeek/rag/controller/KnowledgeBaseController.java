@@ -66,11 +66,12 @@ public class KnowledgeBaseController {
      */
     @PostMapping("/query")
     public Result<String> queryKnowledgeBase(@RequestBody QueryRequest request) {
-        String prompt = knowledgeBaseService.answerBasedOnKnowledge(
+        String answer = knowledgeBaseService.answerBasedOnKnowledge(
                 request.getQuery(),
-                request.getTopK() != null ? request.getTopK() : 5
+                request.getTopK() != null ? request.getTopK() : 5,
+                request.getModel()
         );
-        return Result.ok(prompt == null ? "没有找到相关文档内容" : prompt);
+        return Result.ok(answer == null ? "没有找到相关文档内容" : answer);
     }
 
     /**
@@ -78,12 +79,13 @@ public class KnowledgeBaseController {
      */
     @PostMapping("/documents/{documentId}/query")
     public Result<String> queryDocument(@PathVariable String documentId, @RequestBody QueryRequest request) {
-        String prompt = knowledgeBaseService.answerBasedOnDocument(
+        String answer = knowledgeBaseService.answerBasedOnDocument(
                 documentId,
                 request.getQuery(),
-                request.getTopK() != null ? request.getTopK() : 5
+                request.getTopK() != null ? request.getTopK() : 5,
+                request.getModel()
         );
-        return Result.ok(prompt == null ? "在该文档中没有找到相关内容" : prompt);
+        return Result.ok(answer == null ? "在该文档中没有找到相关内容" : answer);
     }
 
     /**
@@ -98,6 +100,7 @@ public class KnowledgeBaseController {
     public static class QueryRequest {
         private String query;
         private Integer topK;
+        private String model;
 
         public String getQuery() {
             return query;
@@ -113,6 +116,14 @@ public class KnowledgeBaseController {
 
         public void setTopK(Integer topK) {
             this.topK = topK;
+        }
+
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(String model) {
+            this.model = model;
         }
     }
 }

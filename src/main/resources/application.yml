@@ -132,3 +132,11 @@ management:
       show-details: when-authorized
       probes:
         enabled: true
+      group:
+        readiness:
+          include: readinessState,db,redis
+
+logging:
+  pattern:
+    # RequestIdFilter 将 requestId 写入 MDC；日志中统一打印，便于按请求检索。
+    level: "%5p [${spring.application.name:MySeek},%X{requestId:-}]"

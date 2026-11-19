@@ -186,6 +186,61 @@ MYSEEK_FRAME:{"type":"error","message":"生成失败，请稍后重试"}
 
 `content` 帧中的推理标签仍由前端解析；新协议兼容旧版裸文本流和旧版 `MYSEEK_SOURCES` 首帧。
 
+## 生产部署清单
+
+### 1. 必填环境变量
+
+| 变量 | 要求 | 说明 |
+| --- | --- | --- |
+| `JWT_SECRET_KEY` | 必填，至少 32 字节 | 登录令牌签名密钥 |
+| `AI_PROVIDER_SECRET` | 必填 | 供应商 API Key 加密密钥，变更后已有密钥可能无法解密 |
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 必填 | MariaDB 连接信息 |
+| `REDIS_HOST` / `REDIS_PORT` | 必填 | Redis Stack 地址，必须带 RediSearch 模块 |
+| `OLLAMA_BASE_URL` | 使用本地模型时必填 | 例如 `http://ollama:11434` |
+| `CORS_ALLOWED_ORIGINS` | 建议必填 | 多个前端域名用逗号分隔 |
+
+可选：`WEB_SEARCH_PROVIDER=tavily|wikipedia`、`TAVILY_API_KEY`、`WEB_SEARCH_MAX_RESULTS`、`WEB_SEARCH_TIMEOUT_MS`、`REDIS_PASSWORD`、`VECTOR_STORE_INITIALIZE_SCHEMA`、`MAIL_*`。
+
+### 2. 一键启动
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少修改 DB_PASSWORD、DB_ROOT_PASSWORD、JWT_SECRET_KEY、AI_PROVIDER_SECRET
+
+docker compose up -d --build
+```
+
+compose 会启动 MariaDB、Redis Stack、Ollama、后端和前端：
+
+- Web：`http://localhost:3000`
+- 后端：`http://localhost:8080`
+- 健康检查：`http://localhost:8080/actuator/health`
+- 就绪检查：`http://localhost:8080/actuator/health/readiness`
+- 存活检查：`http://localhost:8080/actuator/health/liveness`
+
+### 3. 首次启动检查
+
+1. 确认 Redis Stack 已加载 RediSearch：`docker compose exec redis redis-cli MODULE LIST`。
+2. 确认知识库索引已创建：首次部署保持 `VECTOR_STORE_INITIALIZE_SCHEMA=true`。
+3. 拉取 Ollama 模型（如使用本地模型）：
+   ```bash
+   docker compose exec ollama ollama pull deepseek-r1:1.5b
+   docker compose exec ollama ollama pull nomic-embed-text
+   ```
+4. 用管理员账号登录后，在“用户管理”中创建内部用户。
+5. 在“AI 接口管理”中添加供应商，并进行连通性测试。
+6. 在“知识库”上传一份测试文档，确认状态变为“已完成”。
+
+### 4. 请求链路排查
+
+后端为每个请求生成或透传 `X-Request-Id`，写入日志 MDC 并回写到响应头。日志格式为：
+
+```text
+INFO [MySeek,2f6a...] ...
+```
+
+前端遇到错误时，可查看浏览器 Network 中对应响应的 `X-Request-Id`，再到后端日志中检索该 ID。
+
 ## 最近更新
 
 - 流式对话改为结构化帧协议（meta/content/done/error），前端统一解析并保留旧协议兼容
