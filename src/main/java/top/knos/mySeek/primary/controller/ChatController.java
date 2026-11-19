@@ -26,7 +26,7 @@ public class ChatController {
     }
 
     /**
-     * 流式对话：返回纯文本增量，前端直接按 chunk 读取。
+     * 流式对话：返回结构化帧（meta / content / done / error），前端按帧解析。
      */
     @PostMapping("chat/stream")
     public Flux<String> chatStream(@Valid @RequestBody ChatRequest chatRequest) {

@@ -23,6 +23,7 @@ import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -72,7 +73,12 @@ class ChatServiceTest {
         Flux<String> stream = service.chatStream(new ChatRequest("conv-1", "你好"));
         SecurityContextHolder.clearContext();
 
-        assertEquals(List.of("回复内容"), stream.collectList().block());
+        List<String> frames = stream.collectList().block();
+        assertEquals(3, frames.size());
+        assertTrue(frames.get(0).startsWith(ChatService.STREAM_FRAME_PREFIX + "{\"type\":\"meta\""));
+        assertTrue(frames.get(1).contains("\"type\":\"content\""));
+        assertTrue(frames.get(1).contains("回复内容"));
+        assertTrue(frames.get(2).startsWith(ChatService.STREAM_FRAME_PREFIX + "{\"type\":\"done\""));
 
         verify(advisorSpec).param(ChatMemory.CONVERSATION_ID, "42:conv-1");
         verify(memory).addChatItem(eq("42"), any(ChatInfoVo.class));

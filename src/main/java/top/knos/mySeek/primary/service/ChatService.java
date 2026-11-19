@@ -15,9 +15,11 @@ import top.knos.mySeek.security.domain.User;
 import top.knos.mySeek.security.support.SecurityUtils;
 import top.knos.mySeek.support.vo.ChatInfoVo;
 import top.knos.mySeek.support.vo.WebSearchResult;
+import top.knos.mySeek.utils.JsonUtils;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,9 +38,9 @@ public class ChatService {
     private static final int TITLE_MAX_LENGTH = 100;
     /** 内存中保留的历史消息条数 */
     private static final int HISTORY_PAGE_SIZE = 50;
-    /** 流式首帧中携带联网来源的标记，前端据此解析并剔除该帧 */
-    public static final String SOURCES_FRAME_PREFIX = "\u0000MYSEEK_SOURCES:";
-    public static final String SOURCES_FRAME_SUFFIX = "\u0000\n";
+    /** 结构化流帧前缀；每帧为一行 JSON，前端按行解析 */
+    public static final String STREAM_FRAME_PREFIX = "MYSEEK_FRAME:";
+    public static final String STREAM_FRAME_SUFFIX = "\n";
 
     private final ChatClient chatClient;
     private final RedisChatMemory redisChatMemory;
@@ -118,8 +120,10 @@ public class ChatService {
 
         StringBuilder sb = new StringBuilder();
 
-        Flux<String> contentFlux = response
+        // 统一协议：meta -> content* -> done；异常以 error 帧结束，不把堆栈抛给前端。
+        Flux<String> framedContent = response
                 .doOnNext(sb::append)
+                .map(chunk -> frame("content", Map.of("text", chunk)))
                 .doOnComplete(() -> {
                     log.debug("对话回复: {}", sb);
                     // AI 回复由记忆 Advisor 自动落库，此处只需登记会话条目
@@ -129,13 +133,25 @@ public class ChatService {
                 .doOnCancel(() -> persistPartialReply(scopedConversationId, sb))
                 .doOnError(e -> log.warn("流式对话异常: {}", e.getMessage()));
 
-        // 开启联网时，首帧始终下发元数据（含 performed/engine/sources），
-        // 这样即使没有搜到结果，前端也能明确提示"已联网搜索"，而不是毫无反馈。
-        if (request.isWebSearch()) {
-            String frame = SOURCES_FRAME_PREFIX + searchResult.getMetadataJson() + SOURCES_FRAME_SUFFIX;
-            return Flux.concat(Flux.just(frame), contentFlux);
-        }
-        return contentFlux;
+        Flux<String> completed = framedContent.concatWith(Flux.just(frame("done", Map.of())))
+                .onErrorResume(e -> Flux.just(frame("error", Map.of("message", "生成失败，请稍后重试"))));
+
+        return Flux.concat(Flux.just(metaFrame(searchResult)), completed);
+    }
+
+    private String metaFrame(WebSearchResult result) {
+        return frame("meta", Map.of(
+                "performed", result.isPerformed(),
+                "engine", result.getEngine() == null ? "" : result.getEngine(),
+                "sources", result.getSources() == null ? List.of() : result.getSources()
+        ));
+    }
+
+    private String frame(String type, Map<String, Object> payload) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("type", type);
+        data.putAll(payload);
+        return STREAM_FRAME_PREFIX + JsonUtils.objectToJson(data) + STREAM_FRAME_SUFFIX;
     }
 
     /**

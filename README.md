@@ -167,8 +167,27 @@ pnpm typecheck               # 类型检查
 { "success": true, "code": 200, "msg": null, "data": {} }
 ```
 
+### 流式对话协议
+
+`POST /api/ai/chat/stream` 不使用统一包装，返回逐行帧：
+
+```text
+MYSEEK_FRAME:{"type":"meta","performed":true,"engine":"Tavily","sources":[{"title":"...","url":"..."}]}
+MYSEEK_FRAME:{"type":"content","text":"增量文本"}
+MYSEEK_FRAME:{"type":"done"}
+```
+
+异常结束帧：
+
+```text
+MYSEEK_FRAME:{"type":"error","message":"生成失败，请稍后重试"}
+```
+
+`content` 帧中的推理标签仍由前端解析；新协议兼容旧版裸文本流和旧版 `MYSEEK_SOURCES` 首帧。
+
 ## 最近更新
 
+- 流式对话改为结构化帧协议（meta/content/done/error），前端统一解析并保留旧协议兼容
 - 新增第三方 AI 供应商管理：可视化增删启停、API Key 加密入库、连通性测试；模型选择改为运行时从配置动态解析
 - 新增联网搜索：Tavily 优先、Wikipedia 自动降级，结果注入上下文并回传来源
 - 构建链：Gradle 8.14.3 → 9.9.1，JDK toolchain 21 → 25
