@@ -32,6 +32,9 @@ extra["springAiVersion"] = "2.0.2"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+	// 数据库结构变更统一由 Flyway 管理（生产 ddl-auto=validate）
+	implementation("org.flywaydb:flyway-core")
+	runtimeOnly("org.flywaydb:flyway-mysql")
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.ai:spring-ai-starter-model-ollama")

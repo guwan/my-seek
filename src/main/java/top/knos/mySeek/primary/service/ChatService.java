@@ -57,6 +57,13 @@ public class ChatService {
 
     private ChatClient getChatClient(String modelIdentifier, boolean enableThinking) {
         if (modelIdentifier == null || modelIdentifier.trim().isEmpty()) {
+            // 默认模型由运行时配置决定（例如 Ollama 配置里修改的默认聊天模型）
+            try {
+                ChatClient dynamic = modelProviderManager.getDefaultChatClient();
+                if (dynamic != null) return dynamic;
+            } catch (Exception e) {
+                log.debug("动态默认客户端不可用，使用启动时注入的客户端: {}", e.getMessage());
+            }
             return chatClient;
         }
 

@@ -270,6 +270,12 @@ public class KnowledgeBaseService {
 
     private ChatClient getChatClient(String model) {
         if (model == null || model.isBlank()) {
+            try {
+                ChatClient dynamic = modelProviderManager.getDefaultChatClient();
+                if (dynamic != null) return dynamic;
+            } catch (Exception e) {
+                log.debug("动态默认客户端不可用，知识库使用启动时注入的客户端: {}", e.getMessage());
+            }
             return chatClient;
         }
         try {

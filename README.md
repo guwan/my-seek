@@ -232,6 +232,7 @@ Compose starts MariaDB, Redis Stack, Ollama, backend, and frontend:
 4. Log in with an admin account and create internal users under **User Management**.
 5. Add a provider in **AI Provider Management** and run a connectivity test.
 6. Upload a test document in **Knowledge Base** and confirm it becomes **Completed**.
+7. Confirm Flyway applied the migrations from `db/migration` in the backend logs. Production uses `ddl-auto=validate`, so future schema changes must be added as new migration scripts.
 
 ### 4. Request Tracing
 

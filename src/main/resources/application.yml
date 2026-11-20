@@ -11,6 +11,11 @@ spring:
 
   # 懒加载关联已在 Service 层通过 @Transactional / @EntityGraph 收敛，
   # 不再开启 OSIV，避免 Session/数据库连接随整个请求（尤其 AI 流式接口）长期占用。
+  # 数据库迁移：已有库先 baseline，避免 V1 与历史表冲突
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
   jpa:
     open-in-view: false
     properties:
