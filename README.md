@@ -57,7 +57,7 @@
 ## 环境依赖
 
 - JDK 17+（项目 toolchain 固定为 25，Gradle 会自动使用本机已安装的 JDK 25）
-- Node.js 22+（pnpm）
+- Node.js 24+（pnpm）
 - MariaDB / MySQL 8+
 - Redis 6+
 - （可选）Ollama 本地模型服务

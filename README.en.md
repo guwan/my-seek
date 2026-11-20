@@ -23,7 +23,7 @@
 # Backend (Java 25, MariaDB/MySQL, Redis)
 ./gradlew bootRun
 
-# Frontend (Node.js 22+, pnpm)
+# Frontend (Node.js 24+, pnpm)
 cd ../my-seek-web
 pnpm install && pnpm dev
 ```
