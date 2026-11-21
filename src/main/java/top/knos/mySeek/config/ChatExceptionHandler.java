@@ -34,6 +34,7 @@ public class ChatExceptionHandler {
         if (status == null) {
             status = HttpStatus.BAD_REQUEST;
         }
+        log.warn("业务提示异常 type={} code={} msg={}", ex.getClass().getSimpleName(), status.value(), ex.getMessage());
         return ResponseEntity.status(status).body(Result.fail(status.value(), ex.getMessage()));
     }
 
@@ -43,6 +44,7 @@ public class ChatExceptionHandler {
     @ExceptionHandler(CustomHttpException.class)
     public ResponseEntity<Result<Object>> handleCustomHttp(CustomHttpException ex) {
         HttpStatus status = ex.getHttpStatus() == null ? HttpStatus.INTERNAL_SERVER_ERROR : ex.getHttpStatus();
+        log.warn("HTTP 异常 type={} code={} msg={}", ex.getClass().getSimpleName(), status.value(), ex.getMessage());
         return ResponseEntity.status(status).body(Result.fail(status.value(), ex.getMessage()));
     }
 
@@ -74,6 +76,8 @@ public class ChatExceptionHandler {
         String msg = ex.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining("；"));
+        log.warn("参数校验失败 fields={} msg={}", ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getField).collect(Collectors.toList()), msg);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.fail(HttpStatus.BAD_REQUEST.value(), msg.isEmpty() ? "参数校验失败" : msg));
     }
@@ -83,6 +87,7 @@ public class ChatExceptionHandler {
      */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Result<Object>> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("权限不足 type={} msg={}", ex.getClass().getSimpleName(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Result.fail(HttpStatus.FORBIDDEN.value(), "没有访问权限"));
     }

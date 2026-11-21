@@ -59,6 +59,7 @@ public class WebSearchService {
             return result;
         }
         String trimmed = query.trim();
+        long start = System.nanoTime();
         result.setPerformed(true);
         try {
             List<WebSearchResult.SearchSource> sources = new ArrayList<>();
@@ -78,8 +79,11 @@ public class WebSearchService {
             if (result.getEngine().isEmpty()) {
                 result.setEngine("无可用结果");
             }
+            log.info("联网搜索完成 engine={} sources={} elapsedMs={}", result.getEngine(),
+                    result.getSources().size(), (System.nanoTime() - start) / 1_000_000);
         } catch (Exception e) {
-            log.warn("联网搜索失败，本次对话不使用外部资料: {}", e.getMessage());
+            log.warn("联网搜索失败 provider={} elapsedMs={} error={}", provider,
+                    (System.nanoTime() - start) / 1_000_000, e.getMessage(), e);
             result.setEngine("搜索失败");
         }
         return result;

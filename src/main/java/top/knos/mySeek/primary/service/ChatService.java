@@ -1,6 +1,7 @@
 package top.knos.mySeek.primary.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -8,6 +9,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import top.knos.mySeek.config.RequestIdFilter;
 import top.knos.mySeek.primary.model.ModelProviderManager;
 import top.knos.mySeek.primary.vo.ChatRequest;
 import top.knos.mySeek.primary.vo.MessageVo;
@@ -102,6 +104,7 @@ public class ChatService {
     }
 
     public String chat(ChatRequest request) {
+        long start = System.nanoTime();
         String userScope = userScope();
         String scopedConversationId = scopedConversationId(userScope, request.getConversationId());
         String userInput = request.getMessage();
@@ -114,6 +117,9 @@ public class ChatService {
 
         String aiReply = response.content();
         saveChatItem(userScope, request.getConversationId(), userInput);
+        log.info("同步对话完成 model={} conversationId={} webSearch={} elapsedMs={}",
+                request.getModel(), request.getConversationId(), request.isWebSearch(),
+                (System.nanoTime() - start) / 1_000_000);
         return aiReply;
     }
 
@@ -123,6 +129,9 @@ public class ChatService {
         String userScope = userScope();
         String scopedConversationId = scopedConversationId(userScope, request.getConversationId());
         String userInput = request.getMessage();
+        // MDC 是 ThreadLocal，Reactor 回调线程拿不到；在请求线程捕获后显式写入日志字段
+        String requestId = MDC.get(RequestIdFilter.MDC_KEY);
+        String model = request.getModel();
 
         ChatClient clientToUse = getChatClient(request.getModel(), request.isEnableThinking());
         WebSearchResult searchResult = request.isWebSearch()
@@ -146,14 +155,16 @@ public class ChatService {
                 .doOnCancel(() -> persistPartialReply(scopedConversationId, sb));
 
         Flux<String> completed = framedContent
-                .concatWith(Flux.defer(() -> finishStream(userScope, conversationId, userInput, sb)))
+                .concatWith(Flux.defer(() -> finishStream(userScope, conversationId, userInput, sb, requestId)))
                 .onErrorResume(e -> {
                     if (isTimeout(e)) {
                         // 上游挂起：按已生成内容正常收尾，前端无需等兜底超时。
-                        log.warn("流式对话停滞超时，按已生成内容结束: {}", e.getMessage());
-                        return finishStream(userScope, conversationId, userInput, sb);
+                        log.warn("流式对话停滞超时 requestId={} model={} conversationId={} error={}",
+                                requestId, model, conversationId, e.getMessage());
+                        return finishStream(userScope, conversationId, userInput, sb, requestId);
                     }
-                    log.warn("流式对话异常: {}", e.getMessage());
+                    log.warn("流式对话异常 requestId={} model={} conversationId={} error={}",
+                            requestId, model, conversationId, e.getMessage(), e);
                     return Flux.just(frame("error", Map.of("message", "生成失败，请稍后重试")));
                 });
 
@@ -168,12 +179,14 @@ public class ChatService {
     }
 
     /** 正常完成或停滞收尾时登记会话并下发 done；登记失败不能阻断流结束。 */
-    private Flux<String> finishStream(String userScope, String conversationId, String userInput, StringBuilder sb) {
-        log.debug("对话回复: {}", sb);
+    private Flux<String> finishStream(String userScope, String conversationId, String userInput,
+                                      StringBuilder sb, String requestId) {
+        log.debug("对话回复 requestId={} : {}", requestId, sb);
         try {
             saveChatItem(userScope, conversationId, userInput);
         } catch (Exception e) {
-            log.warn("登记会话条目失败: {}", e.getMessage());
+            log.warn("登记会话条目失败 requestId={} conversationId={} error={}",
+                    requestId, conversationId, e.getMessage(), e);
         }
         return Flux.just(frame("done", Map.of()));
     }

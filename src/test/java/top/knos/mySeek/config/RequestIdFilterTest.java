@@ -7,6 +7,8 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -24,10 +26,12 @@ class RequestIdFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         RequestIdFilter filter = new RequestIdFilter();
 
-        filter.doFilter(request, response, new MockFilterChain());
+        AtomicReference<String> mdcDuringChain = new AtomicReference<>();
+        filter.doFilter(request, response, (req, res) -> mdcDuringChain.set(MDC.get(RequestIdFilter.MDC_KEY)));
 
         assertNotNull(response.getHeader(RequestIdFilter.HEADER_NAME));
         assertFalse(response.getHeader(RequestIdFilter.HEADER_NAME).isBlank());
+        assertEquals(response.getHeader(RequestIdFilter.HEADER_NAME), mdcDuringChain.get());
         assertEquals(null, MDC.get(RequestIdFilter.MDC_KEY));
     }
 
