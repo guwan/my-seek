@@ -9,6 +9,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
 import top.knos.mySeek.primary.model.ModelProviderManager;
 import top.knos.mySeek.primary.vo.ChatRequest;
+import top.knos.mySeek.support.vo.ChatInfoVo;
 import top.knos.mySeek.support.vo.WebSearchResult;
 
 import java.time.Duration;
@@ -112,6 +113,8 @@ class ChatServiceStreamTerminationTest {
 
         assertNotNull(frames);
         assertTrue(frames.stream().anyMatch(f -> f.contains("\"type\":\"content\"")));
+        // 部分回复落库，且会话条目被登记，刷新页面不会丢失该会话
         verify(memory).add(anyString(), anyList());
+        verify(memory).addChatItem(anyString(), any(ChatInfoVo.class));
     }
 }

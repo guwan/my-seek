@@ -151,8 +151,16 @@ public class ChatService {
                 .timeout(Duration.ofSeconds(stallTimeoutSeconds))
                 .doOnNext(sb::append)
                 .map(chunk -> frame("content", Map.of("text", chunk)))
-                // 客户端中途断开时 Advisor 不会落库，此处补写已生成的部分内容
-                .doOnCancel(() -> persistPartialReply(scopedConversationId, sb));
+                // 客户端中途断开时 Advisor 不会落库，此处补写部分回复并登记会话条目
+                .doOnCancel(() -> {
+                    persistPartialReply(scopedConversationId, sb);
+                    try {
+                        saveChatItem(userScope, conversationId, userInput);
+                    } catch (Exception e) {
+                        log.warn("取消时登记会话条目失败 conversationId={} error={}",
+                                conversationId, e.getMessage(), e);
+                    }
+                });
 
         Flux<String> completed = framedContent
                 .concatWith(Flux.defer(() -> finishStream(userScope, conversationId, userInput, sb, requestId)))
