@@ -1,8 +1,9 @@
 package top.knos.mySeek.writing.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -25,8 +26,8 @@ import java.util.Objects;
 public class WritingService {
 
     private final WritingNovelRepository repository;
-    /** Spring Boot 4 不再默认提供 Jackson 2 的 ObjectMapper bean，使用独立实例 */
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    /** Spring Boot 4 使用 Jackson 3，HTTP 转换器与 JSON 类型必须保持一致 */
+    private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
     @Transactional(readOnly = true)
     public List<JsonNode> listNovels(Long userId) {
@@ -34,7 +35,7 @@ public class WritingService {
         for (WritingNovel entity : repository.findByUserIdOrderByCreatedAtDesc(userId)) {
             try {
                 novels.add(objectMapper.readTree(entity.getContentJson()));
-            } catch (JsonProcessingException e) {
+            } catch (JacksonException e) {
                 // 单条脏数据不应导致整个作品列表不可用
                 novels.add(objectMapper.getNodeFactory().objectNode()
                         .put("id", entity.getId())
@@ -95,7 +96,7 @@ public class WritingService {
     private String serialize(JsonNode payload) {
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new TipsException("作品数据无法保存", HttpStatus.BAD_REQUEST.value());
         }
     }

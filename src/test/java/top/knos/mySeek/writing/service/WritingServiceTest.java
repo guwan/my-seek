@@ -1,7 +1,8 @@
 package top.knos.mySeek.writing.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
@@ -28,7 +29,7 @@ class WritingServiceTest {
     @BeforeEach
     void setUp() {
         repository = mock(WritingNovelRepository.class);
-        objectMapper = new ObjectMapper();
+        objectMapper = JsonMapper.builder().build();
         service = new WritingService(repository);
     }
 
