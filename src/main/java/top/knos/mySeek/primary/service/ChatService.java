@@ -5,6 +5,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import top.knos.mySeek.primary.model.ModelProviderManager;
@@ -17,11 +18,13 @@ import top.knos.mySeek.support.vo.ChatInfoVo;
 import top.knos.mySeek.support.vo.WebSearchResult;
 import top.knos.mySeek.utils.JsonUtils;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 /**
  * 聊天服务。
@@ -46,6 +49,10 @@ public class ChatService {
     private final RedisChatMemory redisChatMemory;
     private final ModelProviderManager modelProviderManager;
     private final WebSearchService webSearchService;
+
+    /** 上游停滞超时：距离上一个数据帧超过该时长仍未结束，则按已生成内容收尾 */
+    @Value("${chat.stream.stall-timeout-seconds:300}")
+    private long stallTimeoutSeconds = 300;
 
     public ChatService(ChatClient chatClient, RedisChatMemory redisChatMemory,
                        ModelProviderManager modelProviderManager, WebSearchService webSearchService) {
@@ -126,24 +133,49 @@ public class ChatService {
                 .content();
 
         StringBuilder sb = new StringBuilder();
+        String conversationId = request.getConversationId();
 
-        // 统一协议：meta -> content* -> done；异常以 error 帧结束，不把堆栈抛给前端。
+        // 统一协议：meta -> content* -> done；真实异常才以 error 帧结束。
         Flux<String> framedContent = response
+                // 上游既不吐字也不结束时主动超时，避免 done 帧永远下发不了。
+                // 阈值足够长，慢模型正常输出不会误触发。
+                .timeout(Duration.ofSeconds(stallTimeoutSeconds))
                 .doOnNext(sb::append)
                 .map(chunk -> frame("content", Map.of("text", chunk)))
-                .doOnComplete(() -> {
-                    log.debug("对话回复: {}", sb);
-                    // AI 回复由记忆 Advisor 自动落库，此处只需登记会话条目
-                    saveChatItem(userScope, request.getConversationId(), userInput);
-                })
                 // 客户端中途断开时 Advisor 不会落库，此处补写已生成的部分内容
-                .doOnCancel(() -> persistPartialReply(scopedConversationId, sb))
-                .doOnError(e -> log.warn("流式对话异常: {}", e.getMessage()));
+                .doOnCancel(() -> persistPartialReply(scopedConversationId, sb));
 
-        Flux<String> completed = framedContent.concatWith(Flux.just(frame("done", Map.of())))
-                .onErrorResume(e -> Flux.just(frame("error", Map.of("message", "生成失败，请稍后重试"))));
+        Flux<String> completed = framedContent
+                .concatWith(Flux.defer(() -> finishStream(userScope, conversationId, userInput, sb)))
+                .onErrorResume(e -> {
+                    if (isTimeout(e)) {
+                        // 上游挂起：按已生成内容正常收尾，前端无需等兜底超时。
+                        log.warn("流式对话停滞超时，按已生成内容结束: {}", e.getMessage());
+                        return finishStream(userScope, conversationId, userInput, sb);
+                    }
+                    log.warn("流式对话异常: {}", e.getMessage());
+                    return Flux.just(frame("error", Map.of("message", "生成失败，请稍后重试")));
+                });
 
         return Flux.concat(Flux.just(metaFrame(searchResult)), completed);
+    }
+
+    private boolean isTimeout(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof TimeoutException) return true;
+        }
+        return false;
+    }
+
+    /** 正常完成或停滞收尾时登记会话并下发 done；登记失败不能阻断流结束。 */
+    private Flux<String> finishStream(String userScope, String conversationId, String userInput, StringBuilder sb) {
+        log.debug("对话回复: {}", sb);
+        try {
+            saveChatItem(userScope, conversationId, userInput);
+        } catch (Exception e) {
+            log.warn("登记会话条目失败: {}", e.getMessage());
+        }
+        return Flux.just(frame("done", Map.of()));
     }
 
     private String metaFrame(WebSearchResult result) {

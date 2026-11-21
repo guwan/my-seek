@@ -25,7 +25,8 @@ import java.util.Objects;
 public class WritingService {
 
     private final WritingNovelRepository repository;
-    private final ObjectMapper objectMapper;
+    /** Spring Boot 4 不再默认提供 Jackson 2 的 ObjectMapper bean，使用独立实例 */
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional(readOnly = true)
     public List<JsonNode> listNovels(Long userId) {

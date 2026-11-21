@@ -2,6 +2,7 @@ package top.knos.mySeek.primary.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import top.knos.mySeek.common.Result;
@@ -26,9 +27,10 @@ public class ChatController {
     }
 
     /**
-     * 流式对话：返回结构化帧（meta / content / done / error），前端按帧解析。
+     * 流式对话：返回逐行裸文本帧（meta / content / done / error），前端按帧解析。
+     * 显式声明 text/plain，避免被编码为 SSE 的 data: 前缀或被统一 Result 包装。
      */
-    @PostMapping("chat/stream")
+    @PostMapping(value = "chat/stream", produces = MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8")
     public Flux<String> chatStream(@Valid @RequestBody ChatRequest chatRequest) {
         return chatService.chatStream(chatRequest);
     }

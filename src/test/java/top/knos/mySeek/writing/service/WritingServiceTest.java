@@ -29,7 +29,7 @@ class WritingServiceTest {
     void setUp() {
         repository = mock(WritingNovelRepository.class);
         objectMapper = new ObjectMapper();
-        service = new WritingService(repository, objectMapper);
+        service = new WritingService(repository);
     }
 
     private JsonNode payload(String id, String title) throws Exception {
