@@ -1,3 +1,8 @@
+# 用户数据工作目录：所有生成内容默认写在这里，不写进源码目录。
+# 本地默认 ${user.home}/MySeek；Docker 通过 MYSEEK_WORK_DIR=/app/work 覆盖。
+app:
+  work-dir: ${MYSEEK_WORK_DIR:${user.home}/MySeek}
+
 spring:
   application:
     name: MySeek
@@ -95,11 +100,16 @@ web-search:
     api-key: ${TAVILY_API_KEY:}
     base-url: ${TAVILY_BASE_URL:https://api.tavily.com}
 
-# 文件上传配置
+# 文件上传配置：默认落在工作目录，可用 FILE_UPLOAD_PATH 单独覆盖
 file:
   upload:
-    path: ${FILE_UPLOAD_PATH:uploads/documents/}
+    path: ${FILE_UPLOAD_PATH:${app.work-dir}/uploads/documents}
     max-size: 50MB
+
+# 小说生成文件目录：默认落在工作目录，可用 NOVEL_STORAGE_PATH 单独覆盖
+novel:
+  storage:
+    path: ${NOVEL_STORAGE_PATH:${app.work-dir}/novels}
 
 captcha:
   key: ${CAPTCHA_KEY:captcha_}

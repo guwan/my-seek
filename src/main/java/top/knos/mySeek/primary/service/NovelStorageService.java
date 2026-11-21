@@ -22,7 +22,8 @@ public class NovelStorageService {
     private final Path basePath;
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
-    public NovelStorageService(@Value("${novel.storage.path:./novel}") String basePath) {
+    public NovelStorageService(
+            @Value("${novel.storage.path:${app.work-dir:${user.home}/MySeek}/novels}") String basePath) {
         this.basePath = Path.of(basePath);
     }
 
