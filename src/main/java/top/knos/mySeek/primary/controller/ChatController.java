@@ -60,6 +60,24 @@ public class ChatController {
     }
 
     /**
+     * 删除当前用户的单个会话（含记忆与列表条目）。
+     */
+    @DeleteMapping("chat/item/{conversationId}")
+    public Result<Void> deleteChatItem(@PathVariable String conversationId) {
+        chatService.deleteChatItem(conversationId);
+        return Result.<Void>ok(null);
+    }
+
+    /**
+     * 清空当前用户的全部会话。
+     */
+    @DeleteMapping("chat/item")
+    public Result<Void> clearChatItems() {
+        chatService.clearChatItems();
+        return Result.<Void>ok(null);
+    }
+
+    /**
      * 可用模型列表。
      */
     @GetMapping("models")

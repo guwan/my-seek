@@ -151,32 +151,37 @@ public class ChatService {
                 .timeout(Duration.ofSeconds(stallTimeoutSeconds))
                 .doOnNext(sb::append)
                 .map(chunk -> frame("content", Map.of("text", chunk)))
-                // 客户端中途断开时 Advisor 不会落库，此处补写部分回复并登记会话条目
-                .doOnCancel(() -> {
-                    persistPartialReply(scopedConversationId, sb);
-                    try {
-                        saveChatItem(userScope, conversationId, userInput);
-                    } catch (Exception e) {
-                        log.warn("取消时登记会话条目失败 conversationId={} error={}",
-                                conversationId, e.getMessage(), e);
-                    }
-                });
+                // 客户端中途断开时 Advisor 不会落库，此处补写部分回复。
+                // 会话条目已在订阅开始时登记，收尾阶段不再重复写入，避免删除后被回调“复活”。
+                .doOnCancel(() -> persistPartialReply(scopedConversationId, sb));
 
         Flux<String> completed = framedContent
-                .concatWith(Flux.defer(() -> finishStream(userScope, conversationId, userInput, sb, requestId)))
+                .concatWith(Flux.defer(() -> finishStream(sb, requestId)))
                 .onErrorResume(e -> {
                     if (isTimeout(e)) {
                         // 上游挂起：按已生成内容正常收尾，前端无需等兜底超时。
                         log.warn("流式对话停滞超时 requestId={} model={} conversationId={} error={}",
                                 requestId, model, conversationId, e.getMessage());
-                        return finishStream(userScope, conversationId, userInput, sb, requestId);
+                        return finishStream(sb, requestId);
                     }
                     log.warn("流式对话异常 requestId={} model={} conversationId={} error={}",
                             requestId, model, conversationId, e.getMessage(), e);
                     return Flux.just(frame("error", Map.of("message", "生成失败，请稍后重试")));
                 });
 
-        return Flux.concat(Flux.just(metaFrame(searchResult)), completed);
+        // 会话条目在订阅时登记一次：删除后不会被完成/取消回调重新写回列表。
+        return Flux.concat(
+                Flux.defer(() -> {
+                    try {
+                        saveChatItem(userScope, conversationId, userInput);
+                    } catch (Exception e) {
+                        log.warn("登记会话条目失败 requestId={} conversationId={} error={}",
+                                requestId, conversationId, e.getMessage(), e);
+                    }
+                    return Flux.just(metaFrame(searchResult));
+                }),
+                completed
+        );
     }
 
     private boolean isTimeout(Throwable error) {
@@ -186,16 +191,9 @@ public class ChatService {
         return false;
     }
 
-    /** 正常完成或停滞收尾时登记会话并下发 done；登记失败不能阻断流结束。 */
-    private Flux<String> finishStream(String userScope, String conversationId, String userInput,
-                                      StringBuilder sb, String requestId) {
+    /** 正常完成或停滞收尾时下发 done。 */
+    private Flux<String> finishStream(StringBuilder sb, String requestId) {
         log.debug("对话回复 requestId={} : {}", requestId, sb);
-        try {
-            saveChatItem(userScope, conversationId, userInput);
-        } catch (Exception e) {
-            log.warn("登记会话条目失败 requestId={} conversationId={} error={}",
-                    requestId, conversationId, e.getMessage(), e);
-        }
         return Flux.just(frame("done", Map.of()));
     }
 
@@ -246,6 +244,26 @@ public class ChatService {
 
     public List<ChatInfoVo> chatItemList() {
         return redisChatMemory.getChatItems(userScope());
+    }
+
+    /**
+     * 删除当前用户的单个会话：会话记忆与会话列表条目同时清理。
+     */
+    public void deleteChatItem(String conversationId) {
+        String userScope = userScope();
+        redisChatMemory.clear(scopedConversationId(userScope, conversationId));
+        redisChatMemory.removeChatItem(userScope, conversationId);
+        log.info("删除会话成功 userScope={} conversationId={}", userScope, conversationId);
+    }
+
+    /**
+     * 清空当前用户的全部会话，包括尚未登记到列表的孤立记忆。
+     */
+    public void clearChatItems() {
+        String userScope = userScope();
+        redisChatMemory.clearConversations(userScope);
+        redisChatMemory.clearChatItems(userScope);
+        log.info("清空全部会话成功 userScope={}", userScope);
     }
 
     /**

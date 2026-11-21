@@ -4,11 +4,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.data.redis.core.BoundListOperations;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 import top.knos.mySeek.primary.vo.MessageVo;
 import top.knos.mySeek.support.vo.ChatInfoVo;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -129,6 +132,45 @@ public class RedisChatMemory implements ChatMemory {
             return;
         }
         objectRedisTemplate.opsForHash().delete(ITEM_PREFIX + userScope, conversationId);
+    }
+
+    /**
+     * 清空指定用户的全部会话记忆。按 userScope 前缀 SCAN，包含尚未登记到列表的孤立记忆。
+     */
+    public void clearConversations(String userScope) {
+        if (userScope == null || userScope.isBlank()) {
+            return;
+        }
+        String pattern = PREFIX + userScope + ":*";
+        List<String> keys = new ArrayList<>();
+        try (Cursor<String> cursor = redisTemplate.scan(ScanOptions.scanOptions()
+                .match(pattern)
+                .count(500)
+                .build())) {
+            while (cursor.hasNext()) {
+                keys.add(cursor.next());
+            }
+        } catch (Exception e) {
+            log.warn("扫描用户会话记忆失败 userScope={} pattern={}", userScope, pattern, e);
+            return;
+        }
+        if (keys.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < keys.size(); i += 200) {
+            redisTemplate.delete(new ArrayList<>(keys.subList(i, Math.min(i + 200, keys.size()))));
+        }
+        log.info("清空会话记忆 userScope={} count={}", userScope, keys.size());
+    }
+
+    /**
+     * 清空指定用户的会话列表。
+     */
+    public void clearChatItems(String userScope) {
+        if (userScope == null || userScope.isBlank()) {
+            return;
+        }
+        objectRedisTemplate.delete(ITEM_PREFIX + userScope);
     }
 
     /**
