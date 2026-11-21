@@ -2,13 +2,13 @@ package top.knos.mySeek.rag.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import top.knos.mySeek.exception.CustomHttpException;
@@ -28,22 +28,28 @@ public class VectorStoreService {
 
     /** 文档 ID 元数据字段名 */
     private static final String DOCUMENT_ID_METADATA = "document_id";
+    /** 文档归属用户元数据字段名（字符串形式，供向量检索过滤） */
+    private static final String CREATED_BY_METADATA = "created_by";
 
     @Autowired
     private VectorStore vectorStore;
-
-    @Autowired
-    private EmbeddingModel embeddingModel;
 
     /**
      * 文本分块大小
      */
     private static final int CHUNK_SIZE = 1000;
 
-    /**
-     * 分块重叠大小
-     */
-    private static final int CHUNK_OVERLAP = 200;
+    /** 相似度阈值：低于该相关度的片段不进入回答，避免无关内容干扰 */
+    @Value("${rag.similarity-threshold:0.35}")
+    private double similarityThreshold = 0.35;
+
+    /** 检索返回片段的最大条数，防止超大 topK 撑爆上下文 */
+    @Value("${rag.max-top-k:20}")
+    private int maxTopK = 20;
+
+    /** 拼接进 prompt 的参考信息字符预算，防止上下文超限与成本失控 */
+    @Value("${rag.prompt-max-chars:8000}")
+    private int promptMaxChars = 8000;
 
     /**
      * 将文档内容分块并存储到向量数据库
@@ -94,13 +100,18 @@ public class VectorStoreService {
     /**
      * 搜索相关文档
      */
-    public List<Document> searchSimilarDocuments(String query, int topK) {
+    public List<Document> searchSimilarDocuments(Long userId, String query, int topK) {
         try {
-            log.info("搜索相关文档: query={}, topK={}", query, topK);
+            log.info("搜索相关文档: userId={}, query={}, topK={}", userId, query, topK);
 
+            Filter.Expression userFilter = new FilterExpressionBuilder()
+                    .eq(CREATED_BY_METADATA, String.valueOf(userId))
+                    .build();
             SearchRequest searchRequest = SearchRequest.builder()
                     .query(query)
-                    .topK(topK)
+                    .topK(Math.max(1, Math.min(topK, maxTopK)))
+                    .similarityThreshold(similarityThreshold)
+                    .filterExpression(userFilter)
                     .build();
 
             List<Document> results = vectorStore.similaritySearch(searchRequest);
@@ -108,7 +119,7 @@ public class VectorStoreService {
 
             return results;
         } catch (Exception e) {
-            log.error("搜索文档失败: {}", query, e);
+            log.error("搜索文档失败: query={}", query, e);
             throw new CustomHttpException(describeFailure(e), HttpStatus.SERVICE_UNAVAILABLE);
         }
     }
@@ -136,29 +147,30 @@ public class VectorStoreService {
     /**
      * 搜索特定文档内的相关内容
      */
-    public List<Document> searchInDocument(String documentId, String query, int topK) {
+    public List<Document> searchInDocument(Long userId, String documentId, String query, int topK) {
         try {
-            log.info("在文档 {} 中搜索: query={}, topK={}", documentId, query, topK);
+            log.info("在文档 {} 中搜索: userId={}, query={}, topK={}", documentId, userId, query, topK);
 
-            // 先搜索所有相关文档
+            // 直接在向量层按文档 ID + 归属用户过滤，避免旧的"先全局 topK*2 再过滤"漏召回
+            FilterExpressionBuilder builder = new FilterExpressionBuilder();
+            Filter.Expression expression = builder.and(
+                    builder.eq(DOCUMENT_ID_METADATA, documentId),
+                    builder.eq(CREATED_BY_METADATA, String.valueOf(userId))
+            ).build();
+
             SearchRequest searchRequest = SearchRequest.builder()
                     .query(query)
-                    .topK(topK * 2) // 多搜索一些，然后过滤
+                    .topK(Math.max(1, Math.min(topK, maxTopK)))
+                    .similarityThreshold(similarityThreshold)
+                    .filterExpression(expression)
                     .build();
 
             List<Document> results = vectorStore.similaritySearch(searchRequest);
-
-            // 过滤出指定文档的结果
-            List<Document> filteredResults = results.stream()
-                    .filter(doc -> documentId.equals(doc.getMetadata().get("document_id")))
-                    .limit(topK)
-                    .toList();
-
-            log.info("文档内搜索完成: 找到 {} 个相关片段", filteredResults.size());
-            return filteredResults;
+            log.info("文档内搜索完成: 找到 {} 个相关片段", results.size());
+            return results;
         } catch (Exception e) {
             log.error("文档内搜索失败: documentId={}, query={}", documentId, query, e);
-            throw new RuntimeException("文档内搜索失败: " + e.getMessage());
+            throw new RuntimeException("文档内搜索失败: " + e.getMessage(), e);
         }
     }
 
@@ -188,11 +200,18 @@ public class VectorStoreService {
         prompt.append("基于以下参考信息回答问题。如果参考信息不足以回答问题，请明确说明。\n\n");
         
         prompt.append("=== 参考信息 ===\n");
-        for (int i = 0; i < contextDocuments.size(); i++) {
+        int used = 0;
+        for (int i = 0; i < contextDocuments.size() && used < promptMaxChars; i++) {
             Document doc = contextDocuments.get(i);
-            prompt.append("\n【片段 ").append(i + 1).append("】\n");
-            prompt.append(doc.getText());
-            prompt.append("\n");
+            String header = "\n【片段 " + (i + 1) + "】\n";
+            int remaining = promptMaxChars - used - header.length();
+            if (remaining <= 0) break;
+            String text = doc.getText() == null ? "" : doc.getText();
+            if (text.length() > remaining) {
+                text = text.substring(0, remaining) + "…（已截断）";
+            }
+            prompt.append(header).append(text).append("\n");
+            used += header.length() + text.length();
         }
         
         prompt.append("\n=== 用户问题 ===\n");

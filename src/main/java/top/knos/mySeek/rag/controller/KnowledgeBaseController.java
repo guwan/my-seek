@@ -3,7 +3,9 @@ package top.knos.mySeek.rag.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import top.knos.mySeek.exception.CustomHttpException;
 import org.springframework.web.multipart.MultipartFile;
 import top.knos.mySeek.common.Result;
 import top.knos.mySeek.rag.entity.KnowledgeDocument;
@@ -41,7 +43,7 @@ public class KnowledgeBaseController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) KnowledgeDocument.DocumentStatus status) {
-        return Result.ok(knowledgeBaseService.getDocumentsPage(page, size, status));
+        return Result.ok(knowledgeBaseService.getDocumentsPage(currentUserId(), page, size, status));
     }
 
     /**
@@ -49,7 +51,7 @@ public class KnowledgeBaseController {
      */
     @GetMapping("/documents/completed")
     public Result<List<KnowledgeDocument>> getCompletedDocuments() {
-        return Result.ok(knowledgeBaseService.getCompletedDocuments());
+        return Result.ok(knowledgeBaseService.getCompletedDocuments(currentUserId()));
     }
 
     /**
@@ -57,7 +59,7 @@ public class KnowledgeBaseController {
      */
     @DeleteMapping("/documents/{documentId}")
     public Result<Object> deleteDocument(@PathVariable String documentId) {
-        knowledgeBaseService.deleteDocument(documentId);
+        knowledgeBaseService.deleteDocument(documentId, currentUserId());
         return Result.ok(null);
     }
 
@@ -67,6 +69,7 @@ public class KnowledgeBaseController {
     @PostMapping("/query")
     public Result<String> queryKnowledgeBase(@RequestBody QueryRequest request) {
         String answer = knowledgeBaseService.answerBasedOnKnowledge(
+                currentUserId(),
                 request.getQuery(),
                 request.getTopK() != null ? request.getTopK() : 5,
                 request.getModel()
@@ -80,6 +83,7 @@ public class KnowledgeBaseController {
     @PostMapping("/documents/{documentId}/query")
     public Result<String> queryDocument(@PathVariable String documentId, @RequestBody QueryRequest request) {
         String answer = knowledgeBaseService.answerBasedOnDocument(
+                currentUserId(),
                 documentId,
                 request.getQuery(),
                 request.getTopK() != null ? request.getTopK() : 5,
@@ -88,12 +92,13 @@ public class KnowledgeBaseController {
         return Result.ok(answer == null ? "在该文档中没有找到相关内容" : answer);
     }
 
-    /**
-     * 获取当前登录用户 ID，未登录时返回 null。
-     */
+    /** 获取当前登录用户 ID；未登录直接拒绝，避免出现无归属文档或跨用户数据。 */
     private Long currentUserId() {
         User user = SecurityUtils.getUser();
-        return user == null ? null : user.getId();
+        if (user == null || user.getId() == null) {
+            throw new CustomHttpException("未登录或登录已过期", HttpStatus.UNAUTHORIZED);
+        }
+        return user.getId();
     }
 
     // 请求体

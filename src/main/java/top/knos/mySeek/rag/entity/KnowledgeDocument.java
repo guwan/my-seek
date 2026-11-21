@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
 @Table(name = "knowledge_documents", indexes = {
         @Index(name = "idx_knowledge_documents_status", columnList = "status"),
         @Index(name = "idx_knowledge_documents_created_at", columnList = "created_at"),
-        @Index(name = "idx_knowledge_documents_created_by", columnList = "created_by")
+        @Index(name = "idx_knowledge_documents_created_by", columnList = "created_by"),
+        @Index(name = "idx_knowledge_documents_user_created", columnList = "created_by, created_at")
 })
 @Data
 public class KnowledgeDocument {

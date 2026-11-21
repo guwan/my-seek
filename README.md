@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/guwan/my-seek?style=social)](https://github.com/guwan/my-seek)
 
-**MySeek** is a self-hosted AI chat workspace backend for enterprises. It unifies local models, cloud LLMs, private knowledge bases, and live web search behind one API, with built-in authentication, per-user isolation, and visual model provider management.
+**MySeek** is a self-hosted AI chat workspace backend for everyone. It unifies local models, cloud LLMs, private knowledge bases, and live web search behind one API, with built-in authentication, per-user isolation, and visual model provider management.
 
 > Web workspace: [my-seek-web](https://github.com/guwan/my-seek-web) · Landing page: [my-seek-page](https://github.com/guwan/my-seek-page)
 

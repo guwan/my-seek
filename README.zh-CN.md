@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/guwan/my-seek?style=social)](https://github.com/guwan/my-seek)
 
-**MySeek** 是一套面向企事业内部的私有化 AI 对话工作台后端。它把本地模型、云端大模型、企业知识库与实时联网搜索整合到统一的 API 之下，提供开箱即用的鉴权、会话隔离和可视化模型供应商管理。
+**MySeek** 是一套面向所有人的私有化 AI 对话工作台后端。它把本地模型、云端大模型、私有知识库与实时联网搜索整合到统一的 API 之下，提供开箱即用的鉴权、会话隔离和可视化模型供应商管理。
 
 > Web 工作台：[my-seek-web](https://github.com/guwan/my-seek-web) · 官方宣传站：[my-seek-page](https://github.com/guwan/my-seek-page)
 

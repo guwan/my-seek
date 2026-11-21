@@ -144,6 +144,10 @@ public class KnowledgeBaseService {
             metadata.put("document_name", document.getOriginalName());
             metadata.put("document_type", document.getType());
             metadata.put("upload_time", document.getCreatedAt().toString());
+            // 写入归属用户，供向量检索按用户过滤，防止跨用户命中
+            if (document.getCreatedBy() != null) {
+                metadata.put("created_by", String.valueOf(document.getCreatedBy()));
+            }
 
             int chunkCount = vectorStoreService.storeDocument(document.getId(), content, metadata);
             document.setChunkCount(chunkCount);
@@ -177,13 +181,14 @@ public class KnowledgeBaseService {
      * @param size   每页条数，最大 100
      * @param status 状态过滤，可为 null
      */
-    public Page<KnowledgeDocument> getDocumentsPage(int page, int size, KnowledgeDocument.DocumentStatus status) {
+    public Page<KnowledgeDocument> getDocumentsPage(Long userId, int page, int size,
+                                                     KnowledgeDocument.DocumentStatus status) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(1, size), 100);
         Pageable pageable = PageRequest.of(safePage, safeSize);
         return status == null
-                ? documentRepository.findAllByOrderByCreatedAtDesc(pageable)
-                : documentRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+                ? documentRepository.findByCreatedByOrderByCreatedAtDesc(userId, pageable)
+                : documentRepository.findByCreatedByAndStatusOrderByCreatedAtDesc(userId, status, pageable);
     }
 
     /**
@@ -196,17 +201,18 @@ public class KnowledgeBaseService {
     /**
      * 获取已完成的文档
      */
-    public List<KnowledgeDocument> getCompletedDocuments() {
-        return documentRepository.findByStatusOrderByCreatedAtDesc(KnowledgeDocument.DocumentStatus.COMPLETED);
+    public List<KnowledgeDocument> getCompletedDocuments(Long userId) {
+        return documentRepository.findByCreatedByAndStatusOrderByCreatedAtDesc(
+                userId, KnowledgeDocument.DocumentStatus.COMPLETED);
     }
 
     /**
-     * 删除文档
+     * 删除文档（仅允许删除自己的文档）
      */
     @Transactional
-    public void deleteDocument(String documentId) {
-        KnowledgeDocument document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new RuntimeException("文档不存在: " + documentId));
+    public void deleteDocument(String documentId, Long userId) {
+        KnowledgeDocument document = documentRepository.findByIdAndCreatedBy(documentId, userId)
+                .orElseThrow(() -> new RuntimeException("文档不存在或无权访问: " + documentId));
 
         // 1. 删除向量
         try {
@@ -233,8 +239,8 @@ public class KnowledgeBaseService {
     /**
      * 基于知识库回答问题：检索片段 -> 构建 RAG 提示词 -> 调用模型生成回答。
      */
-    public String answerBasedOnKnowledge(String query, int topK, String model) {
-        var relevantDocs = vectorStoreService.searchSimilarDocuments(query, topK);
+    public String answerBasedOnKnowledge(Long userId, String query, int topK, String model) {
+        var relevantDocs = vectorStoreService.searchSimilarDocuments(userId, query, topK);
         if (relevantDocs.isEmpty()) {
             return null;
         }
@@ -242,10 +248,13 @@ public class KnowledgeBaseService {
     }
 
     /**
-     * 基于特定文档回答问题。
+     * 基于特定文档回答问题（仅允许查询自己的文档）。
      */
-    public String answerBasedOnDocument(String documentId, String query, int topK, String model) {
-        var relevantDocs = vectorStoreService.searchInDocument(documentId, query, topK);
+    public String answerBasedOnDocument(Long userId, String documentId, String query, int topK, String model) {
+        // 先校验归属，避免通过猜测 documentId 读取他人文档
+        documentRepository.findByIdAndCreatedBy(documentId, userId)
+                .orElseThrow(() -> new RuntimeException("文档不存在或无权访问: " + documentId));
+        var relevantDocs = vectorStoreService.searchInDocument(userId, documentId, query, topK);
         if (relevantDocs.isEmpty()) {
             return null;
         }

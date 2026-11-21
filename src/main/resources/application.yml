@@ -124,6 +124,12 @@ app:
   cors:
     allowed-origins: "${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}"
 
+# RAG 检索：相似度阈值过滤无关片段，topK 与 prompt 预算防止上下文超限
+rag:
+  similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.35}
+  max-top-k: ${RAG_MAX_TOP_K:20}
+  prompt-max-chars: ${RAG_PROMPT_MAX_CHARS:8000}
+
 # 流式对话停滞超时：距离上一个数据帧超过该时长仍未结束则按已生成内容收尾。
 # 默认 5 分钟，慢模型正常输出不会误触发；可按部署环境用环境变量覆盖。
 chat:

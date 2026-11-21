@@ -7,37 +7,28 @@ import org.springframework.stereotype.Repository;
 import top.knos.mySeek.rag.entity.KnowledgeDocument;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface KnowledgeDocumentRepository extends JpaRepository<KnowledgeDocument, String> {
 
-    /**
-     * 根据状态查询文档
-     */
-    List<KnowledgeDocument> findByStatus(KnowledgeDocument.DocumentStatus status);
+    /** 分页查询指定用户的文档（按创建时间倒序） */
+    Page<KnowledgeDocument> findByCreatedByOrderByCreatedAtDesc(Long createdBy, Pageable pageable);
 
-    /**
-     * 根据创建者查询文档
-     */
+    /** 分页查询指定用户、指定状态的文档（按创建时间倒序） */
+    Page<KnowledgeDocument> findByCreatedByAndStatusOrderByCreatedAtDesc(
+            Long createdBy, KnowledgeDocument.DocumentStatus status, Pageable pageable);
+
+    /** 查询指定用户的文档 */
     List<KnowledgeDocument> findByCreatedByOrderByCreatedAtDesc(Long createdBy);
 
-    /**
-     * 分页查询所有文档（按创建时间倒序）
-     */
-    Page<KnowledgeDocument> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    /** 查询指定用户、指定状态的文档 */
+    List<KnowledgeDocument> findByCreatedByAndStatusOrderByCreatedAtDesc(
+            Long createdBy, KnowledgeDocument.DocumentStatus status);
 
-    /**
-     * 分页查询指定状态的文档（按创建时间倒序）
-     */
-    Page<KnowledgeDocument> findByStatusOrderByCreatedAtDesc(KnowledgeDocument.DocumentStatus status, Pageable pageable);
+    /** 按 ID + 归属用户查询，用于删除/问答的越权校验 */
+    Optional<KnowledgeDocument> findByIdAndCreatedBy(String id, Long createdBy);
 
-    /**
-     * 查询所有已完成的文档
-     */
-    List<KnowledgeDocument> findByStatusOrderByCreatedAtDesc(KnowledgeDocument.DocumentStatus status);
-
-    /**
-     * 根据名称模糊查询
-     */
+    /** 根据名称模糊查询 */
     List<KnowledgeDocument> findByNameContainingIgnoreCase(String name);
 }
