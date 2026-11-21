@@ -31,4 +31,15 @@ class VectorStoreServiceTest {
         assertTrue(prompt.contains("短片段内容"));
         assertFalse(prompt.contains("已截断"));
     }
+
+    @Test
+    void buildContextTextContainsOnlySnippetsWithoutQuestionInstruction() {
+        VectorStoreService service = new VectorStoreService();
+
+        String context = service.buildContextText(List.of(new Document("短片段内容")));
+
+        assertTrue(context.contains("=== 参考信息 ==="));
+        assertTrue(context.contains("短片段内容"));
+        assertFalse(context.contains("用户问题"));
+    }
 }

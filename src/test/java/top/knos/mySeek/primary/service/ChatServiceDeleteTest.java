@@ -6,6 +6,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import top.knos.mySeek.primary.model.ModelProviderManager;
+import top.knos.mySeek.rag.service.VectorStoreService;
 import top.knos.mySeek.security.domain.User;
 
 import java.util.List;
@@ -22,7 +23,8 @@ class ChatServiceDeleteTest {
 
     private ChatService service(RedisChatMemory memory) {
         return new ChatService(mock(ChatClient.class), memory,
-                mock(ModelProviderManager.class), mock(WebSearchService.class));
+                mock(ModelProviderManager.class), mock(WebSearchService.class),
+                mock(VectorStoreService.class));
     }
 
     private void loginAs(long userId) {

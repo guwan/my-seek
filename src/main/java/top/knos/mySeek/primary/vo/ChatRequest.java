@@ -32,6 +32,17 @@ public class ChatRequest {
      */
     private boolean enableThinking = false;
 
+    /**
+     * 是否参考当前用户的知识库。开启后从向量库检索相关片段并注入模型上下文。
+     */
+    private boolean useKnowledge = true;
+
+    /**
+     * 知识库检索词。为空时使用 message；写作场景可传更简短的意图描述。
+     */
+    @Size(max = 500, message = "知识库检索词长度不能超过 500")
+    private String knowledgeQuery;
+
     public ChatRequest() {
     }
 

@@ -9,6 +9,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
 import top.knos.mySeek.primary.model.ModelProviderManager;
 import top.knos.mySeek.primary.vo.ChatRequest;
+import top.knos.mySeek.rag.service.VectorStoreService;
 import top.knos.mySeek.support.vo.ChatInfoVo;
 import top.knos.mySeek.support.vo.WebSearchResult;
 
@@ -55,7 +56,7 @@ class ChatServiceStreamTerminationTest {
 
         memory = mock(RedisChatMemory.class);
         service = new ChatService(chatClient, memory,
-                mock(ModelProviderManager.class), webSearchService);
+                mock(ModelProviderManager.class), webSearchService, mock(VectorStoreService.class));
         // 缩短超时以便单测快速覆盖停滞分支
         ReflectionTestUtils.setField(service, "stallTimeoutSeconds", 1L);
     }

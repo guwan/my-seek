@@ -14,6 +14,7 @@ import top.knos.mySeek.primary.model.ModelProviderManager;
 import top.knos.mySeek.primary.vo.ChatRequest;
 import top.knos.mySeek.primary.vo.MessageVo;
 import top.knos.mySeek.primary.vo.ModelInfo;
+import top.knos.mySeek.rag.service.VectorStoreService;
 import top.knos.mySeek.security.domain.User;
 import top.knos.mySeek.security.support.SecurityUtils;
 import top.knos.mySeek.support.vo.ChatInfoVo;
@@ -51,17 +52,24 @@ public class ChatService {
     private final RedisChatMemory redisChatMemory;
     private final ModelProviderManager modelProviderManager;
     private final WebSearchService webSearchService;
+    private final VectorStoreService vectorStoreService;
 
     /** 上游停滞超时：距离上一个数据帧超过该时长仍未结束，则按已生成内容收尾 */
     @Value("${chat.stream.stall-timeout-seconds:300}")
     private long stallTimeoutSeconds = 300;
 
+    /** 知识库检索片段数量上限 */
+    @Value("${chat.knowledge.top-k:5}")
+    private int knowledgeTopK = 5;
+
     public ChatService(ChatClient chatClient, RedisChatMemory redisChatMemory,
-                       ModelProviderManager modelProviderManager, WebSearchService webSearchService) {
+                       ModelProviderManager modelProviderManager, WebSearchService webSearchService,
+                       VectorStoreService vectorStoreService) {
         this.chatClient = chatClient;
         this.redisChatMemory = redisChatMemory;
         this.modelProviderManager = modelProviderManager;
         this.webSearchService = webSearchService;
+        this.vectorStoreService = vectorStoreService;
     }
 
     private ChatClient getChatClient(String modelIdentifier, boolean enableThinking) {
@@ -103,6 +111,41 @@ public class ChatService {
         return spec.user(userInput);
     }
 
+    /** 拼接联网搜索与知识库上下文，任一侧为空时返回另一侧。 */
+    private String joinContext(String first, String second) {
+        boolean hasFirst = first != null && !first.isBlank();
+        boolean hasSecond = second != null && !second.isBlank();
+        if (hasFirst && hasSecond) return first + "\n\n" + second;
+        if (hasFirst) return first;
+        if (hasSecond) return second;
+        return null;
+    }
+
+    /** 按当前用户隔离检索知识库片段；检索失败时降级为普通对话，不阻断生成。 */
+    private String loadKnowledgeContext(ChatRequest request, String userInput) {
+        if (!request.isUseKnowledge()) return null;
+        Long userId = currentUserId();
+        if (userId == null) return null;
+
+        String query = request.getKnowledgeQuery();
+        if (query == null || query.isBlank()) query = userInput;
+        if (query == null || query.isBlank()) return null;
+
+        try {
+            var documents = vectorStoreService.searchSimilarDocuments(userId, query, knowledgeTopK);
+            if (documents == null || documents.isEmpty()) return null;
+            return vectorStoreService.buildContextText(documents);
+        } catch (Exception e) {
+            log.warn("知识库检索失败 userId={} query={} error={}", userId, query, e.getMessage());
+            return null;
+        }
+    }
+
+    private Long currentUserId() {
+        User user = SecurityUtils.getUser();
+        return user == null ? null : user.getId();
+    }
+
     public String chat(ChatRequest request) {
         long start = System.nanoTime();
         String userScope = userScope();
@@ -112,14 +155,15 @@ public class ChatService {
         ChatClient clientToUse = getChatClient(request.getModel(), request.isEnableThinking());
         WebSearchResult searchResult = request.isWebSearch()
                 ? webSearchService.search(userInput) : new WebSearchResult();
+        String context = joinContext(searchResult.getContext(), loadKnowledgeContext(request, userInput));
 
-        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, searchResult.getContext()).call();
+        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, context).call();
 
         String aiReply = response.content();
         saveChatItem(userScope, request.getConversationId(), userInput);
-        log.info("同步对话完成 model={} conversationId={} webSearch={} elapsedMs={}",
+        log.info("同步对话完成 model={} conversationId={} webSearch={} useKnowledge={} elapsedMs={}",
                 request.getModel(), request.getConversationId(), request.isWebSearch(),
-                (System.nanoTime() - start) / 1_000_000);
+                request.isUseKnowledge(), (System.nanoTime() - start) / 1_000_000);
         return aiReply;
     }
 
@@ -136,8 +180,9 @@ public class ChatService {
         ChatClient clientToUse = getChatClient(request.getModel(), request.isEnableThinking());
         WebSearchResult searchResult = request.isWebSearch()
                 ? webSearchService.search(userInput) : new WebSearchResult();
+        String context = joinContext(searchResult.getContext(), loadKnowledgeContext(request, userInput));
 
-        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, searchResult.getContext())
+        var response = promptWithMemory(clientToUse, scopedConversationId, userInput, context)
                 .stream()
                 .content();
 

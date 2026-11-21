@@ -192,14 +192,11 @@ public class VectorStoreService {
     }
 
     /**
-     * 构建 RAG 提示词
+     * 构建中性的知识库上下文文本，供对话/写作作为 system 上下文注入。
+     * 不夹带“回答问题”之类指令，避免与写作类提示词冲突。
      */
-    public String buildRagPrompt(String query, List<Document> contextDocuments) {
-        StringBuilder prompt = new StringBuilder();
-        
-        prompt.append("基于以下参考信息回答问题。如果参考信息不足以回答问题，请明确说明。\n\n");
-        
-        prompt.append("=== 参考信息 ===\n");
+    public String buildContextText(List<Document> contextDocuments) {
+        StringBuilder prompt = new StringBuilder("=== 参考信息 ===\n");
         int used = 0;
         for (int i = 0; i < contextDocuments.size() && used < promptMaxChars; i++) {
             Document doc = contextDocuments.get(i);
@@ -213,11 +210,17 @@ public class VectorStoreService {
             prompt.append(header).append(text).append("\n");
             used += header.length() + text.length();
         }
-        
-        prompt.append("\n=== 用户问题 ===\n");
-        prompt.append(query);
-        prompt.append("\n\n请基于上述参考信息回答问题。");
-        
         return prompt.toString();
+    }
+
+    /**
+     * 构建知识库问答提示词（保留独立知识库问答页的行为）。
+     */
+    public String buildRagPrompt(String query, List<Document> contextDocuments) {
+        return "基于以下参考信息回答问题。如果参考信息不足以回答问题，请明确说明。\n\n"
+                + buildContextText(contextDocuments)
+                + "\n\n=== 用户问题 ===\n"
+                + query
+                + "\n\n请基于上述参考信息回答问题。";
     }
 }

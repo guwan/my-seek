@@ -6,12 +6,14 @@ import org.mockito.ArgumentMatchers;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.document.Document;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 import top.knos.mySeek.primary.model.ModelProviderManager;
 import top.knos.mySeek.primary.vo.ChatRequest;
+import top.knos.mySeek.rag.service.VectorStoreService;
 import top.knos.mySeek.security.domain.User;
 import top.knos.mySeek.security.support.SecurityUtils;
 import top.knos.mySeek.support.vo.ChatInfoVo;
@@ -25,6 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -68,7 +72,8 @@ class ChatServiceTest {
         when(webSearchService.search(anyString())).thenReturn(new WebSearchResult());
 
         ChatService service = new ChatService(
-                chatClient, memory, mock(ModelProviderManager.class), webSearchService);
+                chatClient, memory, mock(ModelProviderManager.class), webSearchService,
+                mock(VectorStoreService.class));
 
         Flux<String> stream = service.chatStream(new ChatRequest("conv-1", "你好"));
         SecurityContextHolder.clearContext();
@@ -82,6 +87,51 @@ class ChatServiceTest {
 
         verify(advisorSpec).param(ChatMemory.CONVERSATION_ID, "42:conv-1");
         verify(memory).addChatItem(eq("42"), any(ChatInfoVo.class));
+    }
+
+    @Test
+    void chatStreamInjectsKnowledgeContextForCurrentUser() {
+        User user = new User();
+        user.setId(42L);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, List.of()));
+
+        ChatClient chatClient = mock(ChatClient.class);
+        RedisChatMemory memory = mock(RedisChatMemory.class);
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.StreamResponseSpec streamSpec = mock(ChatClient.StreamResponseSpec.class);
+        ChatClient.AdvisorSpec advisorSpec = mock(ChatClient.AdvisorSpec.class);
+        VectorStoreService vectorStore = mock(VectorStoreService.class);
+
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.advisors(ArgumentMatchers.<Consumer<ChatClient.AdvisorSpec>>any())).thenAnswer(invocation -> {
+            Consumer<ChatClient.AdvisorSpec> consumer = invocation.getArgument(0);
+            consumer.accept(advisorSpec);
+            return requestSpec;
+        });
+        when(advisorSpec.advisors(any(Advisor[].class))).thenReturn(advisorSpec);
+        when(advisorSpec.param(anyString(), any())).thenReturn(advisorSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.stream()).thenReturn(streamSpec);
+        when(streamSpec.content()).thenReturn(Flux.just("回复"));
+
+        when(vectorStore.searchSimilarDocuments(eq(42L), eq("问题"), anyInt()))
+                .thenReturn(List.of(new Document("知识片段")));
+        when(vectorStore.buildContextText(anyList())).thenReturn("知识库上下文");
+
+        WebSearchService webSearchService = mock(WebSearchService.class);
+        when(webSearchService.search(anyString())).thenReturn(new WebSearchResult());
+
+        ChatService service = new ChatService(chatClient, memory,
+                mock(ModelProviderManager.class), webSearchService, vectorStore);
+        ChatRequest request = new ChatRequest("conv-1", "问题");
+        request.setUseKnowledge(true);
+
+        service.chatStream(request).collectList().block();
+
+        verify(vectorStore).searchSimilarDocuments(eq(42L), eq("问题"), anyInt());
+        verify(requestSpec).system("知识库上下文");
     }
 
     @Test
