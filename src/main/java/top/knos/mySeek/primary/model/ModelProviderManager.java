@@ -116,17 +116,24 @@ public class ModelProviderManager {
     }
 
     /**
-     * 获取默认的 ChatClient
+     * 获取默认的 ChatClient（不开启深度思考）。
      */
     public ChatClient getDefaultChatClient() {
+        return getDefaultChatClient(false);
+    }
+
+    /**
+     * 获取默认的 ChatClient，并把深度思考开关传递给提供者。
+     */
+    public ChatClient getDefaultChatClient(boolean enableThinking) {
         if (providers.containsKey("ollama") && providers.get("ollama").isAvailable()) {
-            return providers.get("ollama").createChatClient(null);
+            return providers.get("ollama").createChatClient(null, enableThinking);
         }
         if (providers.containsKey("doubao") && providers.get("doubao").isAvailable()) {
-            return providers.get("doubao").createChatClient("doubao-pro-32k");
+            return providers.get("doubao").createChatClient("doubao-pro-32k", enableThinking);
         }
         if (providers.containsKey("qwen") && providers.get("qwen").isAvailable()) {
-            return providers.get("qwen").createChatClient("qwen-plus");
+            return providers.get("qwen").createChatClient("qwen-plus", enableThinking);
         }
         throw new IllegalStateException("没有可用的模型提供者");
     }

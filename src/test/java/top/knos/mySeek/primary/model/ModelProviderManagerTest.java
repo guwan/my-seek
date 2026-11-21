@@ -50,6 +50,18 @@ class ModelProviderManagerTest {
     }
 
     @Test
+    void defaultChatClientForwardsThinkingFlag() {
+        manager.registerProvider("ollama", provider);
+        when(provider.createChatClient(
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(chatClient);
+
+        assertEquals(chatClient, manager.getDefaultChatClient(true));
+
+        verify(provider).createChatClient(null, true);
+    }
+
+    @Test
     void builtInProviderCannotBeUnregistered() {
         manager.registerProvider("ollama", provider);
         manager.unregisterProvider("ollama");
