@@ -19,13 +19,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ChatServiceStreamTerminationTest {
 
     private ChatClient.StreamResponseSpec streamSpec;
+    private RedisChatMemory memory;
     private ChatService service;
 
     @BeforeEach
@@ -49,7 +52,8 @@ class ChatServiceStreamTerminationTest {
         WebSearchService webSearchService = mock(WebSearchService.class);
         when(webSearchService.search(anyString())).thenReturn(new WebSearchResult());
 
-        service = new ChatService(chatClient, mock(RedisChatMemory.class),
+        memory = mock(RedisChatMemory.class);
+        service = new ChatService(chatClient, memory,
                 mock(ModelProviderManager.class), webSearchService);
         // 缩短超时以便单测快速覆盖停滞分支
         ReflectionTestUtils.setField(service, "stallTimeoutSeconds", 1L);
@@ -93,5 +97,21 @@ class ChatServiceStreamTerminationTest {
 
         assertNotNull(frames);
         assertTrue(frames.get(frames.size() - 1).contains("\"type\":\"error\""));
+    }
+
+    @Test
+    void cancellationPersistsPartialReply() {
+        // 发出一个 chunk 后保持流不结束，take(1) 触发取消
+        when(streamSpec.content()).thenReturn(Flux.just("已生成的部分内容").concatWith(Flux.never()));
+
+        // 需要消费到 content 帧（meta 是第一段），才会进入带 doOnCancel 的 framedContent
+        List<String> frames = service.chatStream(new ChatRequest("conv-1", "你好"))
+                .take(2)
+                .collectList()
+                .block(Duration.ofSeconds(5));
+
+        assertNotNull(frames);
+        assertTrue(frames.stream().anyMatch(f -> f.contains("\"type\":\"content\"")));
+        verify(memory).add(anyString(), anyList());
     }
 }
