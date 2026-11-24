@@ -63,6 +63,12 @@ dependencies {
 	// 而 Spring Boot 4.0 的 BOM 默认锁定 7.0.0（无该类），此处提升版本以启用向量库自动装配
 	runtimeOnly("redis.clients:jedis:7.4.1")
 
+	// Demo 环境：H2 文件数据库（替代 MariaDB），无需外部数据库进程
+	runtimeOnly("com.h2database:h2")
+
+	// Demo 环境：内嵌 Luban-RDS（兼容 Redis 协议，替代 Redis Stack）
+	implementation("com.janeluo:luban-rds-spring-boot-starter:1.0.26")
+
 	//jwt
 	implementation("io.jsonwebtoken:jjwt-api:0.13.0")
 	implementation("io.jsonwebtoken:jjwt-impl:0.13.0")

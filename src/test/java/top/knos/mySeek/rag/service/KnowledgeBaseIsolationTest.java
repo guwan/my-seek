@@ -35,6 +35,7 @@ class KnowledgeBaseIsolationTest {
         vectorStoreService = mock(VectorStoreService.class);
         service = new KnowledgeBaseService(repository, parser, vectorStoreService,
                 mock(ChatClient.class), mock(ModelProviderManager.class),
+                mock(KnowledgeProcessingService.class),
                 "uploads/documents/", "50MB");
     }
 

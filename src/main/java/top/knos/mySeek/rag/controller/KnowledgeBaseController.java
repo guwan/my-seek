@@ -64,6 +64,22 @@ public class KnowledgeBaseController {
     }
 
     /**
+     * 查询单个文档的当前状态（供前端轮询处理进度）
+     */
+    @GetMapping("/documents/{documentId}")
+    public Result<KnowledgeDocument> getDocument(@PathVariable String documentId) {
+        return Result.ok(knowledgeBaseService.getDocument(documentId, currentUserId()));
+    }
+
+    /**
+     * 重新处理失败的文档
+     */
+    @PostMapping("/documents/{documentId}/retry")
+    public Result<KnowledgeDocument> retryDocument(@PathVariable String documentId) {
+        return Result.ok(knowledgeBaseService.retryDocument(documentId, currentUserId()));
+    }
+
+    /**
      * 基于知识库回答问题（RAG）
      */
     @PostMapping("/query")

@@ -1,0 +1,61 @@
+# 一键 Demo 专用配置：H2 文件数据库 + 内嵌 Luban-RDS，无需 Docker / MariaDB / Redis Stack。
+# 由 doc/demo.sh 以 --spring.profiles.active=demo 启动；Luban-RDS 不支持 RediSearch，
+# 因此向量索引初始化必须关闭，知识库 RAG 在 Demo 模式下不可用。
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:${MYSEEK_WORK_DIR:${user.home}/MySeek}/demo-db/seek;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_ON_EXIT=FALSE}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      auto-commit: true
+      minimum-idle: 2
+      idle-timeout: 60000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+      pool-name: demoHikari
+      maximum-pool-size: 10
+  flyway:
+    enabled: false
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: update
+  data:
+    redis:
+      database: ${REDIS_DATABASE:5}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:9736}
+      password: ${REDIS_PASSWORD:}
+      timeout: 6000
+      client-name: my-seek-demo
+      client-type: jedis
+      jedis:
+        pool:
+          max-active: 200
+          max-wait: -1
+          max-idle: 10
+          min-idle: 0
+  ai:
+    vectorstore:
+      redis:
+        # Luban-RDS 不实现 FT.* 命令，禁止启动期建索引
+        initialize-schema: false
+
+luban:
+  rds:
+    enabled: ${LUBAN_RDS_ENABLED:true}
+    host: ${LUBAN_RDS_HOST:localhost}
+    port: ${REDIS_PORT:9736}
+    rdb-enabled: ${LUBAN_RDS_RDB_ENABLED:true}
+    rdb-file-path: ${LUBAN_RDS_DATA_DIR:${MYSEEK_WORK_DIR:${user.home}/MySeek}/demo-luban-rds}/dump.rdb
+    rdb-interval-seconds: 60
+    password: ${REDIS_PASSWORD:}
+    databases: 16
+
+logging:
+  level:
+    root: INFO
+    top.knos: INFO

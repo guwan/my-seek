@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.Set;
 
 /**
@@ -37,8 +38,27 @@ public class DocumentParserService {
      * 解析文档内容
      */
     public String parseDocument(MultipartFile file) {
+        try {
+            return parse(file.getInputStream(), file.getOriginalFilename());
+        } catch (IOException e) {
+            throw new RuntimeException("文档读取失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 解析本地文件。异步任务不能持有 MultipartFile，必须从已落盘的路径读取。
+     */
+    public String parseDocument(Path path) {
+        try {
+            return parse(java.nio.file.Files.newInputStream(path), path.getFileName().toString());
+        } catch (IOException e) {
+            throw new RuntimeException("文档读取失败: " + e.getMessage(), e);
+        }
+    }
+
+    private String parse(InputStream input, String displayName) {
         // Tika 4.x 要求使用 TikaInputStream
-        try (TikaInputStream inputStream = TikaInputStream.get(file.getInputStream())) {
+        try (TikaInputStream inputStream = TikaInputStream.get(input)) {
             // 设置最大输出长度，避免异常大文件撑爆内存
             BodyContentHandler handler = new BodyContentHandler(MAX_CONTENT_LENGTH);
             Metadata metadata = new Metadata();
@@ -48,10 +68,10 @@ public class DocumentParserService {
             parser.parse(inputStream, handler, metadata, context);
 
             String content = handler.toString();
-            log.info("成功解析文档: {}, 内容长度: {}", file.getOriginalFilename(), content.length());
+            log.info("成功解析文档: {}, 内容长度: {}", displayName, content.length());
             return content;
         } catch (Exception e) {
-            log.error("解析文档失败: {}", file.getOriginalFilename(), e);
+            log.error("解析文档失败: {}", displayName, e);
             throw new RuntimeException("文档解析失败: " + e.getMessage(), e);
         }
     }

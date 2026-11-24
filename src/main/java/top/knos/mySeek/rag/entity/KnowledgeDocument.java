@@ -80,6 +80,18 @@ public class KnowledgeDocument {
     private Integer chunkCount = 0;
 
     /**
+     * 重试次数，防止无限重试
+     */
+    @Column(name = "retry_count")
+    private Integer retryCount = 0;
+
+    /**
+     * 最近一次开始处理的时间
+     */
+    @Column(name = "last_attempt_at")
+    private LocalDateTime lastAttemptAt;
+
+    /**
      * 创建时间
      */
     @CreationTimestamp

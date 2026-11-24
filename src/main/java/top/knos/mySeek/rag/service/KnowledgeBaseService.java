@@ -18,9 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -37,9 +35,12 @@ public class KnowledgeBaseService {
     private final VectorStoreService vectorStoreService;
     private final ChatClient chatClient;
     private final ModelProviderManager modelProviderManager;
+    private final KnowledgeProcessingService knowledgeProcessingService;
 
     private static final Pattern THINK_BLOCK = Pattern.compile("(?is)<(think|thinking)>.*?</(think|thinking)>");
     private static final Pattern UNCLOSED_THINK = Pattern.compile("(?is)<(think|thinking)>.*$");
+    private static final int MAX_RETRY = 3;
+    private static final int MAX_ERROR_LENGTH = 2048;
 
     /** 文件存储路径 */
     private final Path uploadDir;
@@ -52,6 +53,7 @@ public class KnowledgeBaseService {
                                 VectorStoreService vectorStoreService,
                                 ChatClient chatClient,
                                 ModelProviderManager modelProviderManager,
+                                KnowledgeProcessingService knowledgeProcessingService,
                                 @Value("${file.upload.path:uploads/documents/}") String uploadDir,
                                 @Value("${file.upload.max-size:50MB}") String maxFileSize) {
         this.documentRepository = documentRepository;
@@ -59,6 +61,7 @@ public class KnowledgeBaseService {
         this.vectorStoreService = vectorStoreService;
         this.chatClient = chatClient;
         this.modelProviderManager = modelProviderManager;
+        this.knowledgeProcessingService = knowledgeProcessingService;
         this.uploadDir = Paths.get(uploadDir);
         this.maxFileSize = parseSize(maxFileSize);
     }
@@ -87,84 +90,62 @@ public class KnowledgeBaseService {
     }
 
     /**
-     * 上传并处理文档。
-     * <p>解析与向量化是耗时操作，这里不开启长事务，避免连接池被长时间占用。</p>
+     * 上传文档：请求线程只做校验、落盘与入库，解析/向量化交给后台任务。
+     * 接口立即返回 PENDING 记录，前端通过轮询状态获知进度。
      */
     public KnowledgeDocument uploadDocument(MultipartFile file, Long userId) {
-        // 1. 验证文件
         validateFile(file);
 
-        // 2. 保存文件信息到数据库
         KnowledgeDocument document = new KnowledgeDocument();
         document.setName(generateUniqueFileName(file.getOriginalFilename()));
         document.setOriginalName(file.getOriginalFilename());
         document.setType(documentParserService.getFileExtension(file.getOriginalFilename()));
         document.setSize(file.getSize());
         document.setStatus(KnowledgeDocument.DocumentStatus.PENDING);
+        document.setRetryCount(0);
         document.setCreatedBy(userId);
-
         document = documentRepository.save(document);
-        log.info("文档信息已保存: {}", document.getId());
 
-        // 3. 异步处理文档（实际项目中应该使用异步任务）
         try {
-            processDocument(document, file);
+            // MultipartFile 在请求结束后会失效，必须在请求线程内先落盘
+            document.setStoragePath(saveFileToLocal(file, document.getName()));
+            document = documentRepository.save(document);
         } catch (Exception e) {
-            log.error("文档处理失败: {}", document.getId(), e);
+            log.error("文档保存失败: {}", document.getId(), e);
             document.setStatus(KnowledgeDocument.DocumentStatus.FAILED);
-            document.setErrorMessage(e.getMessage());
+            document.setErrorMessage(trimMessage(e.getMessage()));
             documentRepository.save(document);
-            throw new RuntimeException("文档处理失败: " + e.getMessage());
+            throw new RuntimeException("文档保存失败: " + e.getMessage(), e);
         }
 
+        knowledgeProcessingService.processAsync(document.getId(), userId);
+        log.info("文档已提交异步处理: {}", document.getId());
         return document;
     }
 
-    /**
-     * 处理文档：解析内容并生成向量
-     */
-    public void processDocument(KnowledgeDocument document, MultipartFile file) {
-        try {
-            // 1. 更新状态为处理中
-            document.setStatus(KnowledgeDocument.DocumentStatus.PROCESSING);
-            documentRepository.save(document);
+    /** 查询单个文档状态（供前端精准轮询，并复用归属校验）。 */
+    public KnowledgeDocument getDocument(String documentId, Long userId) {
+        return documentRepository.findByIdAndCreatedBy(documentId, userId)
+                .orElseThrow(() -> new RuntimeException("文档不存在或无权访问: " + documentId));
+    }
 
-            // 2. 保存文件到本地
-            String storagePath = saveFileToLocal(file, document.getName());
-            document.setStoragePath(storagePath);
-
-            // 3. 解析文档内容
-            log.info("开始解析文档: {}", document.getId());
-            String content = documentParserService.parseDocument(file);
-            document.setContent(content);
-
-            // 4. 生成向量并存储
-            log.info("开始生成向量: {}", document.getId());
-            Map<String, Object> metadata = new HashMap<>();
-            metadata.put("document_name", document.getOriginalName());
-            metadata.put("document_type", document.getType());
-            metadata.put("upload_time", document.getCreatedAt().toString());
-            // 写入归属用户，供向量检索按用户过滤，防止跨用户命中
-            if (document.getCreatedBy() != null) {
-                metadata.put("created_by", String.valueOf(document.getCreatedBy()));
-            }
-
-            int chunkCount = vectorStoreService.storeDocument(document.getId(), content, metadata);
-            document.setChunkCount(chunkCount);
-
-            // 5. 更新状态为完成
-            document.setStatus(KnowledgeDocument.DocumentStatus.COMPLETED);
-            documentRepository.save(document);
-
-            log.info("文档处理完成: {}, 分块数: {}", document.getId(), chunkCount);
-
-        } catch (Exception e) {
-            log.error("文档处理失败: {}", document.getId(), e);
-            document.setStatus(KnowledgeDocument.DocumentStatus.FAILED);
-            document.setErrorMessage(e.getMessage());
-            documentRepository.save(document);
-            throw new RuntimeException("文档处理失败: " + e.getMessage(), e);
+    /** 重新处理失败文档；限制重试次数，避免无限重试。 */
+    public KnowledgeDocument retryDocument(String documentId, Long userId) {
+        KnowledgeDocument document = getDocument(documentId, userId);
+        if (document.getStatus() != KnowledgeDocument.DocumentStatus.FAILED) {
+            throw new IllegalStateException("仅失败的文档可以重试");
         }
+        int retryCount = document.getRetryCount() == null ? 0 : document.getRetryCount();
+        if (retryCount >= MAX_RETRY) {
+            throw new IllegalStateException("重试次数已达上限 " + MAX_RETRY);
+        }
+        document.setRetryCount(retryCount + 1);
+        document.setStatus(KnowledgeDocument.DocumentStatus.PENDING);
+        document.setErrorMessage(null);
+        document = documentRepository.save(document);
+        knowledgeProcessingService.processAsync(documentId, userId);
+        log.info("文档已重新提交处理: {}, retry={}", documentId, document.getRetryCount());
+        return document;
     }
 
     /**
@@ -213,6 +194,9 @@ public class KnowledgeBaseService {
     public void deleteDocument(String documentId, Long userId) {
         KnowledgeDocument document = documentRepository.findByIdAndCreatedBy(documentId, userId)
                 .orElseThrow(() -> new RuntimeException("文档不存在或无权访问: " + documentId));
+        if (knowledgeProcessingService.isActive(documentId)) {
+            throw new IllegalStateException("文档正在处理中，请稍后再删除");
+        }
 
         // 1. 删除向量
         try {
@@ -337,6 +321,11 @@ public class KnowledgeBaseService {
             extension = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
         return UUID.randomUUID().toString() + extension;
+    }
+
+    private static String trimMessage(String message) {
+        if (message == null || message.isBlank()) return "文档处理失败";
+        return message.length() > MAX_ERROR_LENGTH ? message.substring(0, MAX_ERROR_LENGTH) : message;
     }
 
     /**

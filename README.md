@@ -11,6 +11,20 @@
 **MySeek** is a self-hosted AI chat workspace backend for everyone. It unifies local models, cloud LLMs, private knowledge bases, and live web search behind one API, with built-in authentication, per-user isolation, and visual model provider management.
 
 > Web workspace: [my-seek-web](https://github.com/guwan/my-seek-web) · Landing page: [my-seek-page](https://github.com/guwan/my-seek-page)
+>
+> Development progress: [TASKS.md](./TASKS.md)
+
+## One-line Demo
+
+The fastest way to try MySeek — in a terminal with Git Bash (Windows) / macOS / Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/guwan/my-seek/main/doc/demo.sh | bash
+```
+
+The script checks `git`, JDK 25+, Node.js 22+ and pnpm 11+ (missing tools cannot be skipped), asks for the download directory, clones or updates all three repositories, then offers **auto or skip** for the database (auto = embedded H2 file database) and Redis (auto = embedded Luban-RDS). **No Docker, MariaDB or Redis Stack is required.** Ollama is never downloaded automatically: the script prints install and `ollama pull` instructions instead. It then starts the backend with the `demo` profile + web app and opens `http://localhost:5173`.
+
+Re-running is safe: existing checkouts are updated with `git pull --ff-only`, and H2/Luban-RDS data is reused from `.myseek-demo/`. For non-interactive runs set `MYSEEK_DEMO_DIR`, `MYSEEK_DEMO_DB`, `MYSEEK_DEMO_REDIS` (values: `auto` / `skip`). Demo mode disables knowledge-base RAG because Luban-RDS does not implement RediSearch; use Redis Stack for full RAG. Full script: [`doc/demo.sh`](./doc/demo.sh).
 
 ---
 
@@ -28,8 +42,8 @@
 
 | Repository | Description | Main Stack |
 | --- | --- | --- |
-| [guwan/my-seek](https://github.com/guwan/my-seek) | Backend: auth, chat, knowledge base, web search, provider management | Java 25 / Spring Boot 4 / Spring AI 2 |
-| [guwan/my-seek-web](https://github.com/guwan/my-seek-web) | Web chat workspace: multi-model chat, conversation management, AI writing | React 19 / React Router 7 / Redux Toolkit |
+| [guwan/my-seek](https://github.com/guwan/my-seek) | Backend: auth, chat, knowledge base, web search, provider management, AI task center | Java 25 / Spring Boot 4 / Spring AI 2 |
+| [guwan/my-seek-web](https://github.com/guwan/my-seek-web) | Web workspace: multi-model chat, conversation management, AI writing, task center | React 19 / React Router 7 / Redux Toolkit |
 | [guwan/my-seek-page](https://github.com/guwan/my-seek-page) | Landing page: product intro, features, docs entry | Vite 6 / React 19 / Tailwind CSS 4 |
 
 ## Preview

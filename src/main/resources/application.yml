@@ -2,6 +2,8 @@
 # 本地默认 ${user.home}/MySeek；Docker 通过 MYSEEK_WORK_DIR=/app/work 覆盖。
 app:
   work-dir: ${MYSEEK_WORK_DIR:${user.home}/MySeek}
+  cors:
+    allowed-origins: "${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}"
 
 spring:
   application:
@@ -129,10 +131,6 @@ mail:
     token: ${MAIL_TOKEN:}
     register:
       host: ${REGISTER_HOST:http://localhost:8080}
-
-app:
-  cors:
-    allowed-origins: "${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}"
 
 # RAG 检索：相似度阈值过滤无关片段，topK 与 prompt 预算防止上下文超限
 rag:

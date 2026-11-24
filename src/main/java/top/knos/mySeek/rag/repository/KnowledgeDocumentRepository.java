@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import top.knos.mySeek.rag.entity.KnowledgeDocument;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +29,9 @@ public interface KnowledgeDocumentRepository extends JpaRepository<KnowledgeDocu
 
     /** 按 ID + 归属用户查询，用于删除/问答的越权校验 */
     Optional<KnowledgeDocument> findByIdAndCreatedBy(String id, Long createdBy);
+
+    /** 查询未进入终态的文档，用于服务启动后的任务恢复 */
+    List<KnowledgeDocument> findByStatusIn(Collection<KnowledgeDocument.DocumentStatus> statuses);
 
     /** 根据名称模糊查询 */
     List<KnowledgeDocument> findByNameContainingIgnoreCase(String name);

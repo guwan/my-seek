@@ -11,6 +11,20 @@
 **MySeek** 是一套面向所有人的私有化 AI 对话工作台后端。它把本地模型、云端大模型、私有知识库与实时联网搜索整合到统一的 API 之下，提供开箱即用的鉴权、会话隔离和可视化模型供应商管理。
 
 > Web 工作台：[my-seek-web](https://github.com/guwan/my-seek-web) · 官方宣传站：[my-seek-page](https://github.com/guwan/my-seek-page)
+>
+> 开发任务进度：[TASKS.md](./TASKS.md)
+
+## 一行命令一键体验
+
+最快的上手方式：在 Git Bash（Windows）/ macOS / Linux 终端中执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/guwan/my-seek/main/doc/demo.sh | bash
+```
+
+脚本会检查 `git`、JDK 25+、Node.js 22+、pnpm 11+（缺失不可跳过），让你选择代码下载目录，克隆或更新三个仓库，然后对数据库（自动 = 内嵌 H2 文件库）和 Redis（自动 = 内嵌 Luban-RDS）分别询问「自动处理」或「跳过」。**无需 Docker、MariaDB 或 Redis Stack。** Ollama 不会自动下载：脚本只给出安装与 `ollama pull` 提示。随后以 `demo` profile 启动后端与 Web，并打开 `http://localhost:5173`。
+
+重复运行安全：已有代码会执行 `git pull --ff-only`，H2 / Luban-RDS 数据复用 `.myseek-demo/` 目录。非交互场景可预设 `MYSEEK_DEMO_DIR`、`MYSEEK_DEMO_DB`、`MYSEEK_DEMO_REDIS`（取值 `auto` / `skip`）。Demo 模式不启用知识库 RAG（Luban-RDS 不支持 RediSearch），完整 RAG 请使用 Redis Stack。完整脚本见 [`doc/demo.sh`](./doc/demo.sh)。
 
 ---
 
@@ -28,8 +42,8 @@
 
 | 仓库 | 说明 | 主要技术 |
 | --- | --- | --- |
-| [guwan/my-seek](https://github.com/guwan/my-seek) | 后端服务：鉴权、对话、知识库、联网搜索、供应商管理 | Java 25 / Spring Boot 4 / Spring AI 2 |
-| [guwan/my-seek-web](https://github.com/guwan/my-seek-web) | Web 对话工作台：多模型聊天、会话管理、写作助手 | React 19 / React Router 7 / Redux Toolkit |
+| [guwan/my-seek](https://github.com/guwan/my-seek) | 后端服务：鉴权、对话、知识库、联网搜索、供应商管理、AI 任务中心 | Java 25 / Spring Boot 4 / Spring AI 2 |
+| [guwan/my-seek-web](https://github.com/guwan/my-seek-web) | Web 工作台：多模型聊天、会话管理、写作助手、任务中心 | React 19 / React Router 7 / Redux Toolkit |
 | [guwan/my-seek-page](https://github.com/guwan/my-seek-page) | 官方宣传站：产品介绍、特性、文档入口 | Vite 6 / React 19 / Tailwind CSS 4 |
 
 ## 界面预览
