@@ -191,17 +191,26 @@ public class TaskExecutionService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void resumeUnfinishedTasks() {
-        List<AgentTask.Status> statuses = List.of(AgentTask.Status.PLANNING, AgentTask.Status.RUNNING);
-        for (AgentTask task : taskRepository.findByStatusIn(statuses)) {
-            Long userId = task.getCreatedBy();
-            if (task.getStatus() == AgentTask.Status.PLANNING) {
-                task.setStatus(AgentTask.Status.CREATED);
-                taskRepository.save(task);
-                planAsync(task.getId(), userId);
-            } else {
-                executeAsync(task.getId(), userId);
+        // 恢复是增强功能，绝不能因为历史库缺少任务表而阻止整个应用启动。
+        try {
+            List<AgentTask.Status> statuses = List.of(AgentTask.Status.PLANNING, AgentTask.Status.RUNNING);
+            for (AgentTask task : taskRepository.findByStatusIn(statuses)) {
+                try {
+                    Long userId = task.getCreatedBy();
+                    if (task.getStatus() == AgentTask.Status.PLANNING) {
+                        task.setStatus(AgentTask.Status.CREATED);
+                        taskRepository.save(task);
+                        planAsync(task.getId(), userId);
+                    } else {
+                        executeAsync(task.getId(), userId);
+                    }
+                    log.info("已重新投递未完成任务: {}", task.getId());
+                } catch (Exception e) {
+                    log.warn("恢复单个任务失败，跳过: taskId={}, reason={}", task.getId(), e.getMessage());
+                }
             }
-            log.info("已重新投递未完成任务: {}", task.getId());
+        } catch (Exception e) {
+            log.error("扫描未完成任务失败，已跳过恢复；请确认 V6~V9 迁移已执行且 agent_tasks 表存在", e);
         }
     }
 
