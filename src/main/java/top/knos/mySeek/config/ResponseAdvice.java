@@ -10,6 +10,7 @@ import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import reactor.core.publisher.Flux;
 import top.knos.mySeek.common.Result;
@@ -35,7 +36,8 @@ public class ResponseAdvice implements ResponseBodyAdvice<Object> {
         // 流式响应不参与统一包装
         Class<?> returnType = methodParameter.getParameterType();
         return !Flux.class.isAssignableFrom(returnType)
-                && !StreamingResponseBody.class.isAssignableFrom(returnType);
+                && !StreamingResponseBody.class.isAssignableFrom(returnType)
+                && !SseEmitter.class.isAssignableFrom(returnType);
     }
 
     @Override

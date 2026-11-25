@@ -4,10 +4,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.knos.mySeek.common.Result;
 import top.knos.mySeek.exception.CustomHttpException;
 import top.knos.mySeek.security.domain.User;
 import top.knos.mySeek.security.support.SecurityUtils;
+import top.knos.mySeek.task.runtime.TaskEventStreamService;
 import top.knos.mySeek.task.service.TaskService;
 import top.knos.mySeek.task.vo.TaskApprovalReq;
 import top.knos.mySeek.task.vo.TaskCreateReq;
@@ -19,6 +21,7 @@ import top.knos.mySeek.task.vo.TaskVo;
 public class TaskController {
 
     private final TaskService taskService;
+    private final TaskEventStreamService eventStreamService;
 
     @PostMapping
     public Result<TaskVo> create(@RequestBody TaskCreateReq req) {
@@ -34,6 +37,14 @@ public class TaskController {
     @GetMapping("/{taskId}")
     public Result<TaskVo> detail(@PathVariable String taskId) {
         return Result.ok(taskService.detail(currentUserId(), taskId));
+    }
+
+    @GetMapping(value = "/{taskId}/events", produces = "text/event-stream")
+    public SseEmitter events(@PathVariable String taskId,
+                             @RequestParam(defaultValue = "0") long after) {
+        // 先做归属校验，避免通过 SSE 泄漏他人任务事件
+        taskService.detail(currentUserId(), taskId);
+        return eventStreamService.subscribe(taskId, after);
     }
 
     @PostMapping("/{taskId}/confirm")

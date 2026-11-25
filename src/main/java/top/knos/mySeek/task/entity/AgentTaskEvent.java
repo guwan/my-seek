@@ -16,6 +16,10 @@ public class AgentTaskEvent {
     @Column(name = "id", length = 36)
     private String id;
 
+    /** 任务内递增序号，供 SSE 断点续传与去重 */
+    @Column(name = "seq")
+    private Long seq = 0L;
+
     @Column(name = "task_id", length = 36, nullable = false)
     private String taskId;
 

@@ -16,13 +16,13 @@
 | 完整 RAG 实跑 | 未验证 | Demo 用 Luban-RDS（无 RediSearch），RAG 被禁用；需在 Redis Stack 环境验证 |
 | E2E 补跑 | 部分完成 | 供应商 2 例、聊天 2 例已通过；历史会话删除、聊天开关偏好用例未运行 |
 | 知识库健壮性增强 | 部分完成 | 异步上传 + 状态轮询 + 失败重试 + 分页修正已落地；删除补偿、同名去重、历史归属待办 |
-| AI 任务中心一期 | 已完成 | 新建目标 → 计划确认 → 异步执行 → 步骤进度/日志 → 取消/失败重试；5 个按用户隔离的白名单工具；敏感工具审批 |
+| AI 任务中心一期 | 已完成 | 新建目标 → 计划确认 → 异步执行 → 步骤进度/日志 → 取消/失败重试；5 个按用户隔离的白名单工具；敏感工具审批；SSE 实时事件流 |
 
 ## 一、当前任务（按优先级）
 
 ### P0 — 交付与验收
 
-- [ ] 提交本轮改动：一键 Demo（`doc/demo.sh`、`application-demo.yml`、`application.yml` 合并重复 `app` 键）、知识库异步化（`V5` 迁移、处理服务、前端轮询/重试）与 AI 任务中心（`V6`/`V7` 迁移、三张表、`/api/tasks/**`、任务运行时与白名单工具、敏感工具审批、前端任务中心页面）。当前均为工作区未提交状态。
+- [ ] 提交本轮改动：一键 Demo（`doc/demo.sh`、`application-demo.yml`、`application.yml` 合并重复 `app` 键）、知识库异步化（`V5` 迁移、处理服务、前端轮询/重试）与 AI 任务中心（`V6`/`V7`/`V8` 迁移、三张表、`/api/tasks/**`、任务运行时与白名单工具、敏感工具审批、SSE 事件流、前端任务中心页面）。当前均为工作区未提交状态。
 - [ ] 在 Redis Stack 环境实跑完整 RAG：Demo 模式用 Luban-RDS 替代 Redis Stack，不具备 `FT.*` 向量命令，知识库问答需在真实 Redis Stack 下回归。
 - [ ] Docker Compose 实跑验收（与 Demo 无关，属于生产交付）：构建后端/前端镜像，验证 MariaDB、Redis Stack（RediSearch）、Ollama、后端 8080、Web 3000 的启动顺序与健康检查。
 - [ ] 推送后确认三个仓库 GitHub Actions CI 均实际跑通（此前只确认 workflow 文件存在）。
@@ -33,7 +33,7 @@
 - [x] 知识库上传异步化：请求线程只落盘入库，后台线程池解析/向量化；前端轮询 `PENDING/PROCESSING`，失败可重试（最多 3 次），启动后自动恢复未完成任务。证据：`KnowledgeAsyncTest` 3 例、后端全量测试、`pnpm test` 33 例、`tsc --noEmit` 通过。
 - [ ] 知识库删除一致性补偿：向量或本地文件删除失败目前仅告警不中断，可能产生孤儿向量；需要补偿或重试。异步化已加「处理中禁止删除」保护，剩余一致性问题仍未解决。
 - [ ] 补跑 E2E：`e2e/chatHistoryDelete.spec.ts`、`chat.spec.ts` 中聊天开关偏好相关用例。
-- [ ] 验证 Flyway 生产迁移链：`V1`～`V7` 在 `ddl-auto=validate` 下与现有生产库结构一致。
+- [ ] 验证 Flyway 生产迁移链：`V1`～`V8` 在 `ddl-auto=validate` 下与现有生产库结构一致。
 
 ### P2 — 体验与清理
 
@@ -43,7 +43,8 @@
 - [ ] 梳理 `my-seek/doc`：迁移旧提交遗留的小说/文档内容到 `MYSEEK_WORK_DIR/novels`，**保留** `doc/demo.sh` 与 `doc/push-gitee.ps1`。
 - [ ] 处理前端生产构建中 Markdown lazy chunk 仍超过 500 kB 的提示（当前为按需加载，功能不受影响）。
 - [x] AI 任务中心 `ask` 级工具审批：写操作与模型标记的步骤进入 `WAIT_APPROVAL`，前端展示工具与参数并支持批准/拒绝；批准后可继续执行，拒绝则终止。证据：`TaskServiceTest` 6 例、前端 `taskService.test.ts`、`demo` profile 健康检查 UP。
-- [ ] AI 任务中心二期剩余：子 agent 并行、SSE 事件流、MCP 连接器。
+- [x] AI 任务中心 SSE 事件流：`V8` 事件序号、`GET /api/tasks/{id}/events`、`SseEmitter` 订阅/补发/心跳、前端 fetch 流解析与去重；SSE 断开时回退轮询。证据：后端全量测试通过，前端 36 例 + `tsc --noEmit` 通过，`demo` profile 健康检查 UP。
+- [ ] AI 任务中心二期剩余：子 agent 并行、MCP 连接器。
 - [ ] AI 任务中心实际联调：在有可用模型的环境下创建任务 → 确认计划 → 执行 → 查看结果；目前仅完成单测与启动验证。
 
 ## 二、已完成（归档）
@@ -54,6 +55,7 @@
 | 知识库上传异步化 | `@Async` 有界线程池、独立处理服务、`V5` 重试字段、`GET /documents/{id}` 与 `POST /documents/{id}/retry`、前端状态轮询与重试按钮、启动任务恢复 | `KnowledgeAsyncTest` 3 例，后端全量测试通过（1 跳过），前端 33 例 + `tsc --noEmit` 通过 |
 | AI 任务中心一期 | `V6` 三张表、`/api/tasks/**` 六个接口、`plan → plan_review → run` 状态机、独立线程池、5 个按用户隔离的白名单工具、前端 `/tasks` 页面 | `TaskServiceTest` 4 例、后端全量测试通过（1 跳过）、前端 36 例 + `tsc --noEmit` 通过、`demo` profile 启动健康检查 UP |
 | AI 任务中心工具审批 | `V7` 审批字段、`WAIT_APPROVAL` 状态、`POST /api/tasks/{id}/approve`、敏感写工具自动拦截、前端批准/拒绝卡片 | `TaskServiceTest` 6 例、后端全量测试通过（1 跳过）、前端 36 例 + `tsc --noEmit` 通过、`demo` profile 启动健康检查 UP |
+| AI 任务中心 SSE | `V8` 事件序号、`GET /api/tasks/{id}/events`、`SseEmitter` 多订阅/补发/心跳、`ResponseAdvice` 排除 SSE、前端 fetch 流解析与断线轮询回退 | 后端全量测试通过（1 跳过）、前端 36 例 + `tsc --noEmit` 通过、`demo` profile 启动健康检查 UP |
 | V2 第一阶段 | 文档基线校准、知识库页面、结构化流协议 `meta/content/done/error` | 后端单测、`pnpm typecheck` |
 | V2 第二阶段 | 新建写作弹窗、风格描述持久化、仿写生成与设置页风格编辑 | `pnpm typecheck`、`pnpm build` |
 | V2 第三阶段 | `/users` 用户管理页、后端管理员校验、角色/用户字段补充 | `UserControllerTest`、前端构建 |

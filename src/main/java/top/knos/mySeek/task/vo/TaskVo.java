@@ -57,6 +57,7 @@ public class TaskVo {
     @Data
     public static class EventVo {
         private String id;
+        private Long seq;
         private String stepId;
         private String eventType;
         private String payload;
@@ -65,6 +66,7 @@ public class TaskVo {
         public static EventVo from(AgentTaskEvent event) {
             EventVo vo = new EventVo();
             vo.setId(event.getId());
+            vo.setSeq(event.getSeq());
             vo.setStepId(event.getStepId());
             vo.setEventType(event.getEventType());
             vo.setPayload(event.getPayload());
