@@ -32,6 +32,7 @@ public class TaskVo {
         private String title;
         private String tool;
         private String inputJson;
+        private String parallelGroup;
         private Boolean requiresApproval;
         private Boolean approved;
         private AgentTaskStep.Status status;
@@ -45,6 +46,7 @@ public class TaskVo {
             vo.setTitle(step.getTitle());
             vo.setTool(step.getTool());
             vo.setInputJson(step.getInputJson());
+            vo.setParallelGroup(step.getParallelGroup());
             vo.setRequiresApproval(step.getRequiresApproval());
             vo.setApproved(step.getApproved());
             vo.setStatus(step.getStatus());

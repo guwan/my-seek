@@ -26,10 +26,10 @@ public class AgentTask {
     @Column(name = "title", length = 255, nullable = false)
     private String title;
 
-    @Column(name = "goal", length = 4000, nullable = false)
+    @Column(name = "goal", nullable = false, columnDefinition = "TEXT")
     private String goal;
 
-    @Column(name = "constraints_text", length = 2000)
+    @Column(name = "constraints_text", columnDefinition = "TEXT")
     private String constraints;
 
     @Column(name = "model_code", length = 128)
@@ -45,10 +45,10 @@ public class AgentTask {
     @Column(name = "max_steps")
     private Integer maxSteps = 8;
 
-    @Column(name = "final_summary", length = 8000)
+    @Column(name = "final_summary", columnDefinition = "TEXT")
     private String finalSummary;
 
-    @Column(name = "error_message", length = 2048)
+    @Column(name = "error_message", length = 1024)
     private String errorMessage;
 
     @Column(name = "created_by")

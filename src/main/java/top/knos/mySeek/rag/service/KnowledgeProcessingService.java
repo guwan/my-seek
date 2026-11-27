@@ -127,17 +127,26 @@ public class KnowledgeProcessingService {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void resumeUnfinishedDocuments() {
-        List<KnowledgeDocument> unfinished = documentRepository.findByStatusIn(
-                List.of(KnowledgeDocument.DocumentStatus.PENDING, KnowledgeDocument.DocumentStatus.PROCESSING));
-        for (KnowledgeDocument document : unfinished) {
-            if (document.getId() == null) continue;
-            document.setStatus(KnowledgeDocument.DocumentStatus.PENDING);
-            document.setErrorMessage(null);
-            documentRepository.save(document);
-            final String id = document.getId();
-            final Long owner = document.getCreatedBy();
-            taskExecutor.execute(() -> processAsync(id, owner));
-            log.info("已重新投递未完成的知识库任务: {}", id);
+        // 恢复是增强功能，历史库缺少知识库表时不能阻止整个应用启动。
+        try {
+            List<KnowledgeDocument> unfinished = documentRepository.findByStatusIn(
+                    List.of(KnowledgeDocument.DocumentStatus.PENDING, KnowledgeDocument.DocumentStatus.PROCESSING));
+            for (KnowledgeDocument document : unfinished) {
+                try {
+                    if (document.getId() == null) continue;
+                    document.setStatus(KnowledgeDocument.DocumentStatus.PENDING);
+                    document.setErrorMessage(null);
+                    documentRepository.save(document);
+                    final String id = document.getId();
+                    final Long owner = document.getCreatedBy();
+                    taskExecutor.execute(() -> processAsync(id, owner));
+                    log.info("已重新投递未完成的知识库任务: {}", id);
+                } catch (Exception e) {
+                    log.warn("恢复单个知识库任务失败，跳过: id={}, reason={}", document.getId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("扫描未完成知识库任务失败，已跳过恢复；请确认 knowledge_documents 表存在", e);
         }
     }
 

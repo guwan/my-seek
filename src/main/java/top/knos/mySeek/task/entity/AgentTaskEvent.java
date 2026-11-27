@@ -29,7 +29,7 @@ public class AgentTaskEvent {
     @Column(name = "event_type", length = 64, nullable = false)
     private String eventType;
 
-    @Column(name = "payload", length = 4000)
+    @Column(name = "payload", columnDefinition = "TEXT")
     private String payload;
 
     @Column(name = "created_by")

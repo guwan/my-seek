@@ -43,4 +43,20 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /** 并行子步骤线程池，独立于任务调度线程池，避免嵌套提交时互相饿死。 */
+    @Bean("agentStepExecutor")
+    public Executor agentStepExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("agent-step-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        // 并发步骤超限时退回调用线程执行，保证步骤不会因拒绝策略而丢失
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
 }

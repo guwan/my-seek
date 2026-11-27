@@ -14,7 +14,8 @@ public class TaskEventService {
     private final AgentTaskEventRepository eventRepository;
     private final TaskEventStreamService streamService;
 
-    public void record(String taskId, String stepId, String type, String payload, Long userId) {
+    /** synchronized 保证并发步骤写入时事件序号分配唯一、递增。 */
+    public synchronized void record(String taskId, String stepId, String type, String payload, Long userId) {
         AgentTaskEvent event = new AgentTaskEvent();
         event.setId(UUID.randomUUID().toString());
         Long lastSeq = eventRepository.findTopByTaskIdOrderBySeqDesc(taskId)

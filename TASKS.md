@@ -3,7 +3,7 @@
 > 单页查看开发进度与下一步。详细验收证据见工作区根目录 `IMPLEMENTATION_STATUS.md` 与 `FEATURE_SUMMARY.md`。
 > 状态约定：`[x]` 已完成并有验证记录；`[ ]` 未完成；标有「未验证」的项表示代码已落地但缺少实跑证据。
 
-最近更新：2026-11-23
+最近更新：2026-11-26
 
 ## 进度总览
 
@@ -17,23 +17,26 @@
 | E2E 补跑 | 部分完成 | 供应商 2 例、聊天 2 例已通过；历史会话删除、聊天开关偏好用例未运行 |
 | 知识库健壮性增强 | 部分完成 | 异步上传 + 状态轮询 + 失败重试 + 分页修正已落地；删除补偿、同名去重、历史归属待办 |
 | AI 任务中心一期 | 已完成 | 新建目标 → 计划确认 → 异步执行 → 步骤进度/日志 → 取消/失败重试；5 个按用户隔离的白名单工具；敏感工具审批；SSE 实时事件流 |
+| AI 任务中心并行子步骤 | 已完成 | 计划可标记 `parallel_group`，同组连续步骤并发执行（轻量 sub-agent）；写操作自动排除并行；前端展示并行组标签 |
 
 ## 一、当前任务（按优先级）
 
 ### P0 — 交付与验收
 
-- [ ] 提交本轮改动：一键 Demo（`doc/demo.sh`、`application-demo.yml`、`application.yml` 合并重复 `app` 键）、知识库异步化（`V5` 迁移、处理服务、前端轮询/重试）与 AI 任务中心（`V6`/`V7`/`V8` 迁移、三张表、`/api/tasks/**`、任务运行时与白名单工具、敏感工具审批、SSE 事件流、前端任务中心页面）。当前均为工作区未提交状态。
+- [ ] 提交本轮改动：一键 Demo（`doc/demo.sh`、`application-demo.yml`、`application.yml` 合并重复 `app` 键）、知识库异步化（`V5` 迁移、处理服务、前端轮询/重试）与 AI 任务中心（`V6`～`V11` 迁移、三张表、`/api/tasks/**`、任务运行时与白名单工具、敏感工具审批、SSE 事件流、并行子步骤、前端任务中心页面）。当前均为工作区未提交状态。
 - [ ] 在 Redis Stack 环境实跑完整 RAG：Demo 模式用 Luban-RDS 替代 Redis Stack，不具备 `FT.*` 向量命令，知识库问答需在真实 Redis Stack 下回归。
 - [ ] Docker Compose 实跑验收（与 Demo 无关，属于生产交付）：构建后端/前端镜像，验证 MariaDB、Redis Stack（RediSearch）、Ollama、后端 8080、Web 3000 的启动顺序与健康检查。
 - [ ] 推送后确认三个仓库 GitHub Actions CI 均实际跑通（此前只确认 workflow 文件存在）。
 - [ ] 后端重启后回归会话删除接口：旧进程曾返回 `No static resource api/ai/chat/item/...`，新路由已由 `ChatControllerDeleteTest` 验证。
+- [x] 修复历史库缺表导致启动失败：两个启动恢复监听器改为非致命；新增幂等迁移 `V9__task_schema_repair.sql`。验证：禁用 `ddl-auto` 的空库启动仍返回 `HEALTH=UP`，仅记录跳过恢复的日志。
+- [x] 修复 MariaDB 行大小超限（Error 1118）：任务实体长文本字段改用 `columnDefinition = "TEXT"`；`V6`/`V9` 改用 TEXT，`V10` 动态把已有 VARCHAR 列改为 TEXT。验证：全新 H2 库启动无 DDL 报错且 `HEALTH=UP`，后端全量测试通过。
 
 ### P1 — 稳定性与验证
 
 - [x] 知识库上传异步化：请求线程只落盘入库，后台线程池解析/向量化；前端轮询 `PENDING/PROCESSING`，失败可重试（最多 3 次），启动后自动恢复未完成任务。证据：`KnowledgeAsyncTest` 3 例、后端全量测试、`pnpm test` 33 例、`tsc --noEmit` 通过。
 - [ ] 知识库删除一致性补偿：向量或本地文件删除失败目前仅告警不中断，可能产生孤儿向量；需要补偿或重试。异步化已加「处理中禁止删除」保护，剩余一致性问题仍未解决。
 - [ ] 补跑 E2E：`e2e/chatHistoryDelete.spec.ts`、`chat.spec.ts` 中聊天开关偏好相关用例。
-- [ ] 验证 Flyway 生产迁移链：`V1`～`V8` 在 `ddl-auto=validate` 下与现有生产库结构一致。
+- [ ] 验证 Flyway 生产迁移链：`V1`～`V11` 在 `ddl-auto=validate` 下与现有生产库结构一致（如历史库校验和因 V6/V9 修正不一致，先执行 `flyway repair`）。
 
 ### P2 — 体验与清理
 
@@ -44,7 +47,8 @@
 - [ ] 处理前端生产构建中 Markdown lazy chunk 仍超过 500 kB 的提示（当前为按需加载，功能不受影响）。
 - [x] AI 任务中心 `ask` 级工具审批：写操作与模型标记的步骤进入 `WAIT_APPROVAL`，前端展示工具与参数并支持批准/拒绝；批准后可继续执行，拒绝则终止。证据：`TaskServiceTest` 6 例、前端 `taskService.test.ts`、`demo` profile 健康检查 UP。
 - [x] AI 任务中心 SSE 事件流：`V8` 事件序号、`GET /api/tasks/{id}/events`、`SseEmitter` 订阅/补发/心跳、前端 fetch 流解析与去重；SSE 断开时回退轮询。证据：后端全量测试通过，前端 36 例 + `tsc --noEmit` 通过，`demo` profile 健康检查 UP。
-- [ ] AI 任务中心二期剩余：子 agent 并行、MCP 连接器。
+- [x] AI 任务中心并行子步骤：`V11` 步骤加 `parallel_group`；计划 prompt 允许独立只读步骤标记同组，写操作/需审批步骤自动排除并行；同名不连续组自动重命名为 `group_2`；执行器按批调度，同组步骤并发、组间顺序，批次共享组前结果快照；新增 `agentStepExecutor` 线程池与事件序号加锁。证据：`TaskExecutionServiceTest` 6 例（含 `CountDownLatch` 验证跨线程并发）、后端全量测试通过、`tsc --noEmit` 通过、`demo` profile 健康检查 UP。
+- [ ] AI 任务中心二期剩余：MCP 连接器。
 - [ ] AI 任务中心实际联调：在有可用模型的环境下创建任务 → 确认计划 → 执行 → 查看结果；目前仅完成单测与启动验证。
 
 ## 二、已完成（归档）
@@ -56,6 +60,7 @@
 | AI 任务中心一期 | `V6` 三张表、`/api/tasks/**` 六个接口、`plan → plan_review → run` 状态机、独立线程池、5 个按用户隔离的白名单工具、前端 `/tasks` 页面 | `TaskServiceTest` 4 例、后端全量测试通过（1 跳过）、前端 36 例 + `tsc --noEmit` 通过、`demo` profile 启动健康检查 UP |
 | AI 任务中心工具审批 | `V7` 审批字段、`WAIT_APPROVAL` 状态、`POST /api/tasks/{id}/approve`、敏感写工具自动拦截、前端批准/拒绝卡片 | `TaskServiceTest` 6 例、后端全量测试通过（1 跳过）、前端 36 例 + `tsc --noEmit` 通过、`demo` profile 启动健康检查 UP |
 | AI 任务中心 SSE | `V8` 事件序号、`GET /api/tasks/{id}/events`、`SseEmitter` 多订阅/补发/心跳、`ResponseAdvice` 排除 SSE、前端 fetch 流解析与断线轮询回退 | 后端全量测试通过（1 跳过）、前端 36 例 + `tsc --noEmit` 通过、`demo` profile 启动健康检查 UP |
+| AI 任务中心并行子步骤 | `V11` 步骤 `parallel_group`、`agentStepExecutor` 线程池、批次并发执行与审批门禁、事件序号加锁、前端并行组标签 | `TaskExecutionServiceTest` 6 例、后端全量测试通过（1 跳过）、`tsc --noEmit` 通过、`demo` profile 启动健康检查 UP |
 | V2 第一阶段 | 文档基线校准、知识库页面、结构化流协议 `meta/content/done/error` | 后端单测、`pnpm typecheck` |
 | V2 第二阶段 | 新建写作弹窗、风格描述持久化、仿写生成与设置页风格编辑 | `pnpm typecheck`、`pnpm build` |
 | V2 第三阶段 | `/users` 用户管理页、后端管理员校验、角色/用户字段补充 | `UserControllerTest`、前端构建 |

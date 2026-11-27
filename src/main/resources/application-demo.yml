@@ -49,7 +49,8 @@ luban:
     enabled: ${LUBAN_RDS_ENABLED:true}
     host: ${LUBAN_RDS_HOST:localhost}
     port: ${REDIS_PORT:9736}
-    rdb-enabled: ${LUBAN_RDS_RDB_ENABLED:true}
+    # Demo 不需要跨重启保留 Redis 数据，关闭 RDB 可避免在项目目录生成 data/dump.rdb
+    rdb-enabled: ${LUBAN_RDS_RDB_ENABLED:false}
     rdb-file-path: ${LUBAN_RDS_DATA_DIR:${MYSEEK_WORK_DIR:${user.home}/MySeek}/demo-luban-rds}/dump.rdb
     rdb-interval-seconds: 60
     password: ${REDIS_PASSWORD:}

@@ -40,6 +40,7 @@ out/
 logs/
 uploads/
 novel/
+data/
 *.log
 
 ### 本地敏感配置与启动脚本（禁止提交真实凭据） ###

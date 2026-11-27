@@ -138,6 +138,12 @@ rag:
   max-top-k: ${RAG_MAX_TOP_K:20}
   prompt-max-chars: ${RAG_PROMPT_MAX_CHARS:8000}
 
+# 内嵌 Luban-RDS 默认关闭，仅在 demo profile（或显式设置 LUBAN_RDS_ENABLED=true）时启用，
+# 避免普通开发/生产模式在项目目录生成 data/dump.rdb
+luban:
+  rds:
+    enabled: ${LUBAN_RDS_ENABLED:false}
+
 # 流式对话停滞超时：距离上一个数据帧超过该时长仍未结束则按已生成内容收尾。
 # 默认 5 分钟，慢模型正常输出不会误触发；可按部署环境用环境变量覆盖。
 chat:

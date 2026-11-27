@@ -34,8 +34,12 @@ public class AgentTaskStep {
     @Column(name = "tool", length = 64)
     private String tool;
 
-    @Column(name = "input_json", length = 4000)
+    @Column(name = "input_json", columnDefinition = "TEXT")
     private String inputJson;
+
+    /** 并行组名：相同组名且连续的步骤同时执行，留空表示顺序执行 */
+    @Column(name = "parallel_group", length = 64)
+    private String parallelGroup;
 
     /** 敏感工具执行前是否需要用户批准 */
     @Column(name = "requires_approval")
@@ -49,10 +53,10 @@ public class AgentTaskStep {
     @Column(name = "status", length = 32, nullable = false)
     private Status status;
 
-    @Column(name = "result_text", length = 8000)
+    @Column(name = "result_text", columnDefinition = "TEXT")
     private String resultText;
 
-    @Column(name = "error_message", length = 2048)
+    @Column(name = "error_message", length = 1024)
     private String errorMessage;
 
     @Column(name = "created_by")

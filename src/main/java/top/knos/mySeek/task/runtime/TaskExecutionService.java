@@ -1,6 +1,7 @@
 package top.knos.mySeek.task.runtime;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -15,13 +16,18 @@ import top.knos.mySeek.task.repository.AgentTaskRepository;
 import top.knos.mySeek.task.repository.AgentTaskStepRepository;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 
 /**
  * AI 任务运行时：plan 阶段产出可见步骤，build 阶段逐步执行。
+ * 同一 parallel_group 且连续的步骤并发执行（轻量 sub-agent 风格），批次之间顺序执行。
  * 使用独立 Bean 承载 @Async，避免同类自调用导致代理失效。
  */
 @Slf4j
@@ -33,6 +39,7 @@ public class TaskExecutionService {
     private final TaskEventService eventService;
     private final AgentToolRegistry toolRegistry;
     private final ModelProviderManager modelProviderManager;
+    private final Executor stepExecutor;
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
     private final Set<String> activeTasks = ConcurrentHashMap.newKeySet();
 
@@ -40,12 +47,14 @@ public class TaskExecutionService {
                                 AgentTaskStepRepository stepRepository,
                                 TaskEventService eventService,
                                 AgentToolRegistry toolRegistry,
-                                ModelProviderManager modelProviderManager) {
+                                ModelProviderManager modelProviderManager,
+                                @Qualifier("agentStepExecutor") Executor stepExecutor) {
         this.taskRepository = taskRepository;
         this.stepRepository = stepRepository;
         this.eventService = eventService;
         this.toolRegistry = toolRegistry;
         this.modelProviderManager = modelProviderManager;
+        this.stepExecutor = stepExecutor;
     }
 
     @Async("agentTaskExecutor")
@@ -62,9 +71,11 @@ public class TaskExecutionService {
                     .prompt()
                     .system("""
                             你是任务规划助手。只输出标准 JSON，不要 Markdown 代码块，不要额外说明。
-                             格式：{"steps":[{"title":"步骤标题","tool":"model|knowledge_search|knowledge_list|novel_read|novel_write_draft|web_search","input":"JSON 对象字符串","reason":"为什么做这步","requires_approval":false}]}
+                             格式：{"steps":[{"title":"步骤标题","tool":"model|knowledge_search|knowledge_list|novel_read|novel_write_draft|web_search","input":"JSON 对象字符串","reason":"为什么做这步","requires_approval":false,"parallel_group":""}]}
                              tool 必须在白名单内；不需要工具时填 model。步骤数不超过 8，每步目标必须具体可执行。
-                             写操作工具（novel_write_draft）必须设置 requires_approval=true，其他步骤只在确实会修改数据时设为 true。
+                             写操作工具（novel_write_draft）必须设置 requires_approval=true，且不要设置 parallel_group。
+                             parallel_group 仅用于彼此独立、无先后依赖、无写冲突的只读步骤：给它们填相同的组名（如 "batch1"），这些步骤会同时执行。
+                             留空或省略 parallel_group 表示顺序执行；同一组的步骤请连续排列。
                              """)
                     .user("任务目标：" + task.getGoal() + "\n约束：" + nullToEmpty(task.getConstraints())
                             + "\n标题：" + task.getTitle())
@@ -74,11 +85,12 @@ public class TaskExecutionService {
             List<PlannedStep> planned = parsePlan(raw);
             if (planned.isEmpty()) {
                 PlannedStep fallback = new PlannedStep("根据目标生成结果", "model",
-                        "{\"prompt\":" + quote(task.getGoal()) + "}", "模型无法输出有效计划，直接执行目标", false);
+                        "{\"prompt\":" + quote(task.getGoal()) + "}", "模型无法输出有效计划，直接执行目标", false, "");
                 planned.add(fallback);
             }
             int max = task.getMaxSteps() == null ? 8 : task.getMaxSteps();
             if (planned.size() > max) planned = planned.subList(0, max);
+            normalizeParallelGroups(planned);
 
             int seq = 1;
             for (PlannedStep item : planned) {
@@ -89,6 +101,7 @@ public class TaskExecutionService {
                 step.setTitle(item.title());
                 step.setTool(item.tool());
                 step.setInputJson(item.input());
+                step.setParallelGroup(item.parallelGroup());
                 step.setRequiresApproval(item.requiresApproval());
                 step.setApproved(false);
                 step.setStatus(AgentTaskStep.Status.PENDING);
@@ -121,58 +134,73 @@ public class TaskExecutionService {
             if (task == null || task.getStatus() != AgentTask.Status.RUNNING) return;
 
             List<AgentTaskStep> steps = stepRepository.findByTaskIdOrderBySeqAsc(taskId);
+            List<List<AgentTaskStep>> batches = groupIntoBatches(steps);
             List<String> previousResults = new ArrayList<>();
             int executed = 0;
             int max = task.getMaxSteps() == null ? 8 : task.getMaxSteps();
 
-            for (AgentTaskStep step : steps) {
+            for (List<AgentTaskStep> batch : batches) {
                 AgentTask current = taskRepository.findById(taskId).orElse(null);
                 if (current == null || current.getStatus() != AgentTask.Status.RUNNING) return;
-                if (step.getStatus() == AgentTaskStep.Status.SUCCEEDED) {
-                    previousResults.add("[" + step.getTitle() + "] " + shortText(step.getResultText()));
-                    continue;
+
+                List<AgentTaskStep> pending = new ArrayList<>();
+                for (AgentTaskStep step : batch) {
+                    if (step.getStatus() == AgentTaskStep.Status.SUCCEEDED) {
+                        previousResults.add("[" + step.getTitle() + "] " + shortText(step.getResultText()));
+                    } else if (step.getStatus() != AgentTaskStep.Status.SKIPPED) {
+                        pending.add(step);
+                    }
                 }
-                if (Boolean.TRUE.equals(step.getRequiresApproval()) && !Boolean.TRUE.equals(step.getApproved())) {
+                if (pending.isEmpty()) continue;
+
+                AgentTaskStep approving = pending.stream()
+                        .filter(s -> Boolean.TRUE.equals(s.getRequiresApproval())
+                                && !Boolean.TRUE.equals(s.getApproved()))
+                        .findFirst().orElse(null);
+                if (approving != null) {
                     current.setStatus(AgentTask.Status.WAIT_APPROVAL);
-                    current.setCurrentStep(step.getSeq());
+                    current.setCurrentStep(approving.getSeq());
                     taskRepository.save(current);
-                    step.setStatus(AgentTaskStep.Status.PENDING);
-                    stepRepository.save(step);
-                    eventService.record(taskId, step.getId(), "approval_requested",
-                            "等待批准：" + step.getTitle() + "，工具=" + step.getTool()
-                                    + "，参数=" + shortText(step.getInputJson()), userId);
-                    log.info("任务等待工具审批: taskId={}, step={}, tool={}", taskId, step.getId(), step.getTool());
+                    approving.setStatus(AgentTaskStep.Status.PENDING);
+                    stepRepository.save(approving);
+                    eventService.record(taskId, approving.getId(), "approval_requested",
+                            "等待批准：" + approving.getTitle() + "，工具=" + approving.getTool()
+                                    + "，参数=" + shortText(approving.getInputJson()), userId);
+                    log.info("任务等待工具审批: taskId={}, step={}, tool={}", taskId, approving.getId(), approving.getTool());
                     return;
                 }
-                if (executed >= max) {
+
+                executed += pending.size();
+                if (executed > max) {
                     throw new IllegalStateException("执行步数超过上限 " + max);
                 }
-                executed++;
 
-                step.setStatus(AgentTaskStep.Status.RUNNING);
-                step.setErrorMessage(null);
-                stepRepository.save(step);
-                current.setCurrentStep(step.getSeq());
-                taskRepository.save(current);
-                eventService.record(taskId, step.getId(), "step_started", step.getTitle(), userId);
-
-                try {
-                    String result = executeStep(current, step, previousResults);
-                    step.setResultText(result);
-                    step.setStatus(AgentTaskStep.Status.SUCCEEDED);
-                    stepRepository.save(step);
-                    previousResults.add("[" + step.getTitle() + "] " + shortText(result));
-                    eventService.record(taskId, step.getId(), "step_finished", shortText(result), userId);
-                } catch (Exception e) {
-                    log.error("任务步骤失败: taskId={}, step={}", taskId, step.getId(), e);
-                    step.setStatus(AgentTaskStep.Status.FAILED);
-                    step.setErrorMessage(trim(e.getMessage(), "步骤执行失败"));
-                    stepRepository.save(step);
-                    current.setStatus(AgentTask.Status.FAILED);
-                    current.setErrorMessage(step.getErrorMessage());
-                    taskRepository.save(current);
-                    eventService.record(taskId, step.getId(), "step_failed", step.getErrorMessage(), userId);
+                List<StepOutcome> outcomes = executeBatch(current, pending, previousResults, userId);
+                String failure = null;
+                AgentTaskStep failedStep = null;
+                for (StepOutcome outcome : outcomes) {
+                    if (outcome.error() != null) {
+                        failure = outcome.error();
+                        failedStep = outcome.step();
+                        break;
+                    }
+                }
+                if (failure != null) {
+                    AgentTask failedTask = taskRepository.findById(taskId).orElse(null);
+                    if (failedTask != null) {
+                        failedTask.setStatus(AgentTask.Status.FAILED);
+                        failedTask.setErrorMessage(failure);
+                        taskRepository.save(failedTask);
+                    }
+                    eventService.record(taskId, failedStep.getId(), "step_failed", failure, userId);
                     return;
+                }
+
+                for (StepOutcome outcome : outcomes) {
+                    previousResults.add("[" + outcome.step().getTitle() + "] "
+                            + shortText(outcome.step().getResultText()));
+                    eventService.record(taskId, outcome.step().getId(), "step_finished",
+                            shortText(outcome.step().getResultText()), userId);
                 }
             }
 
@@ -184,6 +212,15 @@ public class TaskExecutionService {
             taskRepository.save(finished);
             eventService.record(taskId, null, "task_completed", "任务已完成", userId);
             log.info("任务执行完成: taskId={}", taskId);
+        } catch (Exception e) {
+            log.error("任务执行异常: taskId={}", taskId, e);
+            AgentTask failed = taskRepository.findById(taskId).orElse(null);
+            if (failed != null && failed.getStatus() == AgentTask.Status.RUNNING) {
+                failed.setStatus(AgentTask.Status.FAILED);
+                failed.setErrorMessage(trim(e.getMessage(), "任务执行失败"));
+                taskRepository.save(failed);
+                eventService.record(taskId, null, "task_failed", failed.getErrorMessage(), userId);
+            }
         } finally {
             activeTasks.remove(taskId);
         }
@@ -210,8 +247,114 @@ public class TaskExecutionService {
                 }
             }
         } catch (Exception e) {
-            log.error("扫描未完成任务失败，已跳过恢复；请确认 V6~V9 迁移已执行且 agent_tasks 表存在", e);
+            log.error("扫描未完成任务失败，已跳过恢复；请确认 V6~V11 迁移已执行且 agent_tasks 表存在", e);
         }
+    }
+
+    /** 将一个批次（单步骤或并行组）投入执行，返回与入参同序的结果。 */
+    private List<StepOutcome> executeBatch(AgentTask task, List<AgentTaskStep> batch,
+                                           List<String> previousResults, Long userId) {
+        List<String> sharedContext = List.copyOf(previousResults);
+        boolean parallel = batch.size() > 1;
+
+        for (AgentTaskStep step : batch) {
+            step.setStatus(AgentTaskStep.Status.RUNNING);
+            step.setErrorMessage(null);
+            stepRepository.save(step);
+            eventService.record(task.getId(), step.getId(), "step_started", step.getTitle(), userId);
+        }
+        task.setCurrentStep(batch.get(batch.size() - 1).getSeq());
+        taskRepository.save(task);
+
+        if (!parallel) {
+            return List.of(executeOne(task, batch.get(0), sharedContext));
+        }
+
+        List<CompletableFuture<StepOutcome>> futures = new ArrayList<>();
+        for (AgentTaskStep step : batch) {
+            futures.add(CompletableFuture.supplyAsync(
+                    () -> executeOne(task, step, sharedContext), stepExecutor));
+        }
+        List<StepOutcome> outcomes = new ArrayList<>();
+        for (int i = 0; i < futures.size(); i++) {
+            try {
+                outcomes.add(futures.get(i).join());
+            } catch (Exception e) {
+                AgentTaskStep step = batch.get(i);
+                log.error("并行步骤执行异常: taskId={}, step={}", task.getId(), step.getId(), e);
+                step.setStatus(AgentTaskStep.Status.FAILED);
+                step.setErrorMessage(trim(e.getMessage(), "并行步骤执行失败"));
+                stepRepository.save(step);
+                outcomes.add(new StepOutcome(step, step.getErrorMessage()));
+            }
+        }
+        return outcomes;
+    }
+
+    private StepOutcome executeOne(AgentTask task, AgentTaskStep step, List<String> previousResults) {
+        try {
+            String result = executeStep(task, step, previousResults);
+            step.setResultText(result);
+            step.setStatus(AgentTaskStep.Status.SUCCEEDED);
+            stepRepository.save(step);
+            return new StepOutcome(step, null);
+        } catch (Exception e) {
+            log.error("任务步骤失败: taskId={}, step={}", task.getId(), step.getId(), e);
+            step.setStatus(AgentTaskStep.Status.FAILED);
+            step.setErrorMessage(trim(e.getMessage(), "步骤执行失败"));
+            stepRepository.save(step);
+            return new StepOutcome(step, step.getErrorMessage());
+        }
+    }
+
+    /** 按 parallel_group 把连续同组步骤聚成批次；组名为空的步骤各自成批。包可见便于单测。 */
+    static List<List<AgentTaskStep>> groupIntoBatches(List<AgentTaskStep> steps) {
+        List<List<AgentTaskStep>> batches = new ArrayList<>();
+        List<AgentTaskStep> current = new ArrayList<>();
+        String currentGroup = null;
+        for (AgentTaskStep step : steps) {
+            String group = groupOf(step);
+            if (group != null && group.equals(currentGroup)) {
+                current.add(step);
+            } else {
+                if (!current.isEmpty()) batches.add(current);
+                current = new ArrayList<>();
+                current.add(step);
+                currentGroup = group;
+            }
+        }
+        if (!current.isEmpty()) batches.add(current);
+        return batches;
+    }
+
+    /** 同名但不连续的并行组重命名为 group_2、group_3，避免跨批次混淆。 */
+    static void normalizeParallelGroups(List<PlannedStep> planned) {
+        Map<String, Integer> occurrences = new HashMap<>();
+        String lastOriginal = null;
+        String effectiveGroup = null;
+        for (int i = 0; i < planned.size(); i++) {
+            PlannedStep item = planned.get(i);
+            String original = item.parallelGroup();
+            if (original == null || original.isBlank()) {
+                lastOriginal = null;
+                effectiveGroup = null;
+                continue;
+            }
+            if (!original.equals(lastOriginal)) {
+                int count = occurrences.merge(original, 1, Integer::sum);
+                effectiveGroup = count > 1 ? original + "_" + count : original;
+                lastOriginal = original;
+            }
+            if (!effectiveGroup.equals(original)) {
+                planned.set(i, new PlannedStep(item.title(), item.tool(), item.input(),
+                        item.reason(), item.requiresApproval(), effectiveGroup));
+            }
+        }
+    }
+
+    private static String groupOf(AgentTaskStep step) {
+        String group = step.getParallelGroup();
+        return group == null || group.isBlank() ? null : group.trim();
     }
 
     private String executeStep(AgentTask task, AgentTaskStep step, List<String> previousResults) {
@@ -271,7 +414,10 @@ public class TaskExecutionService {
                 String reason = text(node, "reason", "");
                 boolean requiresApproval = bool(node, "requires_approval")
                         || bool(node, "requiresApproval") || toolRegistry.isSensitive(tool);
-                result.add(new PlannedStep(title, tool, input, reason, requiresApproval));
+                String parallelGroup = text(node, "parallel_group", "");
+                if (parallelGroup.isBlank()) parallelGroup = text(node, "parallelGroup", "");
+                if (requiresApproval || toolRegistry.isSensitive(tool)) parallelGroup = "";
+                result.add(new PlannedStep(title, tool, input, reason, requiresApproval, parallelGroup));
             }
         } catch (Exception e) {
             log.warn("解析任务计划 JSON 失败，将使用单步兜底: {}", e.getMessage());
@@ -298,7 +444,10 @@ public class TaskExecutionService {
         }
     }
 
-    private record PlannedStep(String title, String tool, String input, String reason, boolean requiresApproval) {}
+    record PlannedStep(String title, String tool, String input, String reason,
+                       boolean requiresApproval, String parallelGroup) {}
+
+    private record StepOutcome(AgentTaskStep step, String error) {}
 
     private static boolean bool(JsonNode node, String key) {
         JsonNode value = node == null ? null : node.get(key);
