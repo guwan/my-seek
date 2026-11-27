@@ -2,6 +2,7 @@ package top.knos.mySeek.task.runtime;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
+import top.knos.mySeek.agent.service.CatalogService;
 import top.knos.mySeek.primary.model.ModelProviderManager;
 import top.knos.mySeek.task.entity.AgentTask;
 import top.knos.mySeek.task.entity.AgentTaskStep;
@@ -77,9 +78,10 @@ class TaskExecutionServiceTest {
     @Test
     void parsePlanReadsParallelGroupAndClearsItForApprovedOrSensitiveSteps() throws Exception {
         AgentToolRegistry registry = mock(AgentToolRegistry.class);
+        when(registry.availableTools()).thenReturn(AgentToolRegistry.ALLOWED_TOOLS);
         when(registry.isSensitive("novel_write_draft")).thenReturn(true);
         TaskExecutionService service = new TaskExecutionService(
-                null, null, null, registry, null, Runnable::run);
+                null, null, null, registry, null, mock(CatalogService.class), Runnable::run);
 
         String json = """
                 {"steps":[
@@ -104,8 +106,9 @@ class TaskExecutionServiceTest {
     @Test
     void parsePlanFallsBackToEmptyGroupWhenMissing() throws Exception {
         AgentToolRegistry registry = mock(AgentToolRegistry.class);
+        when(registry.availableTools()).thenReturn(AgentToolRegistry.ALLOWED_TOOLS);
         TaskExecutionService service = new TaskExecutionService(
-                null, null, null, registry, null, Runnable::run);
+                null, null, null, registry, null, mock(CatalogService.class), Runnable::run);
 
         @SuppressWarnings("unchecked")
         List<TaskExecutionService.PlannedStep> planned = (List<TaskExecutionService.PlannedStep>)
@@ -162,7 +165,7 @@ class TaskExecutionServiceTest {
                 r -> new Thread(r, "test-step-" + threadSeq.incrementAndGet()));
         try {
             TaskExecutionService service = new TaskExecutionService(
-                    taskRepo, stepRepo, events, registry, models, pool);
+                    taskRepo, stepRepo, events, registry, models, mock(CatalogService.class), pool);
 
             service.executeAsync(taskId, 1L);
 

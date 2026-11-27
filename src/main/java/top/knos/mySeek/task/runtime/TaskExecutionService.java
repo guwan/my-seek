@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import top.knos.mySeek.agent.entity.SkillDefinition;
+import top.knos.mySeek.agent.service.CatalogService;
 import top.knos.mySeek.primary.model.ModelProviderManager;
 import top.knos.mySeek.task.entity.AgentTask;
 import top.knos.mySeek.task.entity.AgentTaskStep;
@@ -39,6 +41,7 @@ public class TaskExecutionService {
     private final TaskEventService eventService;
     private final AgentToolRegistry toolRegistry;
     private final ModelProviderManager modelProviderManager;
+    private final CatalogService catalogService;
     private final Executor stepExecutor;
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
     private final Set<String> activeTasks = ConcurrentHashMap.newKeySet();
@@ -48,12 +51,14 @@ public class TaskExecutionService {
                                 TaskEventService eventService,
                                 AgentToolRegistry toolRegistry,
                                 ModelProviderManager modelProviderManager,
+                                CatalogService catalogService,
                                 @Qualifier("agentStepExecutor") Executor stepExecutor) {
         this.taskRepository = taskRepository;
         this.stepRepository = stepRepository;
         this.eventService = eventService;
         this.toolRegistry = toolRegistry;
         this.modelProviderManager = modelProviderManager;
+        this.catalogService = catalogService;
         this.stepExecutor = stepExecutor;
     }
 
@@ -67,18 +72,28 @@ public class TaskExecutionService {
             taskRepository.save(task);
             eventService.record(taskId, null, "planning_started", "正在生成执行计划", userId);
 
-            String raw = chatClient(task.getModelCode())
+            var agent = catalogService.findUsableAgent(userId, task.getAgentCode());
+            var skills = agent == null ? List.<SkillDefinition>of()
+                    : catalogService.findUsableSkills(userId, parseCodes(agent.getSkillsJson()));
+            String model = task.getModelCode() != null && !task.getModelCode().isBlank()
+                    ? task.getModelCode() : (agent == null ? null : agent.getModelCode());
+            String persona = agent == null ? "" : "\n专家人设：" + nullToEmpty(agent.getSystemPrompt());
+            String skillGuide = skills.isEmpty() ? "" : "\n要求使用的技能指引：\n" + skillInstruction(skills);
+
+            String raw = chatClient(model)
                     .prompt()
                     .system("""
                             你是任务规划助手。只输出标准 JSON，不要 Markdown 代码块，不要额外说明。
-                             格式：{"steps":[{"title":"步骤标题","tool":"model|knowledge_search|knowledge_list|novel_read|novel_write_draft|web_search","input":"JSON 对象字符串","reason":"为什么做这步","requires_approval":false,"parallel_group":""}]}
-                             tool 必须在白名单内；不需要工具时填 model。步骤数不超过 8，每步目标必须具体可执行。
+                             格式：{"steps":[{"title":"步骤标题","tool":"工具名","input":"JSON 对象字符串","reason":"为什么做这步","requires_approval":false,"parallel_group":""}]}
+                             内置工具：model|knowledge_search|knowledge_list|novel_read|novel_write_draft|web_search；不需要工具时填 model。
+                             步骤数不超过 8，每步目标必须具体可执行。
                              写操作工具（novel_write_draft）必须设置 requires_approval=true，且不要设置 parallel_group。
                              parallel_group 仅用于彼此独立、无先后依赖、无写冲突的只读步骤：给它们填相同的组名（如 "batch1"），这些步骤会同时执行。
                              留空或省略 parallel_group 表示顺序执行；同一组的步骤请连续排列。
                              """)
                     .user("任务目标：" + task.getGoal() + "\n约束：" + nullToEmpty(task.getConstraints())
-                            + "\n标题：" + task.getTitle())
+                            + "\n标题：" + task.getTitle() + persona + skillGuide
+                            + "\n可用工具：\n" + toolCatalog())
                     .call()
                     .content();
 
@@ -360,12 +375,16 @@ public class TaskExecutionService {
     private String executeStep(AgentTask task, AgentTaskStep step, List<String> previousResults) {
         String tool = step.getTool();
         if (tool == null || tool.isBlank() || tool.equals("model")) {
+            var agent = catalogService.findUsableAgent(task.getCreatedBy(), task.getAgentCode());
+            String persona = agent == null ? "" : "\n专家人设：" + nullToEmpty(agent.getSystemPrompt());
             String prompt = "任务目标：" + task.getGoal()
                     + "\n约束：" + nullToEmpty(task.getConstraints())
-                    + "\n当前步骤：" + step.getTitle()
+                    + "\n当前步骤：" + step.getTitle() + persona
                     + "\n此前结果：\n" + String.join("\n", previousResults)
                     + "\n补充提示：" + promptFromInput(step.getInputJson());
-            return chatClient(task.getModelCode())
+            String model = task.getModelCode() != null && !task.getModelCode().isBlank()
+                    ? task.getModelCode() : (agent == null ? null : agent.getModelCode());
+            return chatClient(model)
                     .prompt()
                     .system("你是任务执行助手。基于任务目标与已有结果完成当前步骤，输出可直接使用的文本，不要输出分析过程。")
                     .user(prompt)
@@ -394,6 +413,36 @@ public class TaskExecutionService {
         return modelProviderManager.createChatClient(modelCode);
     }
 
+    private String toolCatalog() {
+        return toolRegistry.catalog();
+    }
+
+    private List<String> parseCodes(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            JsonNode node = objectMapper.readTree(json);
+            if (!node.isArray()) return List.of();
+            List<String> result = new ArrayList<>();
+            for (JsonNode item : node) {
+                String code = item.asString(null);
+                if (code != null && !code.isBlank()) result.add(code);
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("解析技能 code 列表失败: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private String skillInstruction(List<SkillDefinition> skills) {
+        StringBuilder sb = new StringBuilder();
+        for (SkillDefinition skill : skills) {
+            sb.append("- ").append(nullToEmpty(skill.getName())).append("：")
+                    .append(nullToEmpty(skill.getPromptTemplate())).append("\n");
+        }
+        return sb.toString();
+    }
+
     private List<PlannedStep> parsePlan(String raw) {
         List<PlannedStep> result = new ArrayList<>();
         if (raw == null || raw.isBlank()) return result;
@@ -409,7 +458,7 @@ public class TaskExecutionService {
                 String title = text(node, "title", "");
                 if (title.isBlank()) continue;
                 String tool = text(node, "tool", "model");
-                if (!tool.equals("model") && !AgentToolRegistry.ALLOWED_TOOLS.contains(tool)) tool = "model";
+                if (!tool.equals("model") && !toolRegistry.availableTools().contains(tool)) tool = "model";
                 String input = inputJson(node.get("input"));
                 String reason = text(node, "reason", "");
                 boolean requiresApproval = bool(node, "requires_approval")

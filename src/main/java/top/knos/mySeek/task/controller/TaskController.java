@@ -34,6 +34,11 @@ public class TaskController {
         return Result.ok(taskService.list(currentUserId(), page, size));
     }
 
+    @GetMapping("/tools")
+    public Result<java.util.List<String>> tools() {
+        return Result.ok(taskService.listTools());
+    }
+
     @GetMapping("/{taskId}")
     public Result<TaskVo> detail(@PathVariable String taskId) {
         return Result.ok(taskService.detail(currentUserId(), taskId));

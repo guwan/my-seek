@@ -35,6 +35,10 @@ public class AgentTask {
     @Column(name = "model_code", length = 128)
     private String modelCode;
 
+    /** 使用的专家 code，空表示通用助理 */
+    @Column(name = "agent_code", length = 64)
+    private String agentCode;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 32, nullable = false)
     private Status status;

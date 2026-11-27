@@ -7,6 +7,7 @@ import top.knos.mySeek.task.entity.AgentTaskStep;
 import top.knos.mySeek.task.repository.AgentTaskEventRepository;
 import top.knos.mySeek.task.repository.AgentTaskRepository;
 import top.knos.mySeek.task.repository.AgentTaskStepRepository;
+import top.knos.mySeek.task.runtime.AgentToolRegistry;
 import top.knos.mySeek.task.runtime.TaskEventService;
 import top.knos.mySeek.task.runtime.TaskExecutionService;
 import top.knos.mySeek.task.vo.TaskApprovalReq;
@@ -36,7 +37,8 @@ class TaskServiceTest {
         eventRepository = mock(AgentTaskEventRepository.class);
         eventService = mock(TaskEventService.class);
         executionService = mock(TaskExecutionService.class);
-        service = new TaskService(taskRepository, stepRepository, eventRepository, eventService, executionService);
+        service = new TaskService(taskRepository, stepRepository, eventRepository, eventService,
+                executionService, mock(AgentToolRegistry.class));
         when(taskRepository.save(any(AgentTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(stepRepository.save(any(AgentTaskStep.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(stepRepository.findByTaskIdOrderBySeqAsc(any())).thenReturn(List.of());

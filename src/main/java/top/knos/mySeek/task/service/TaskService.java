@@ -9,6 +9,7 @@ import top.knos.mySeek.task.entity.AgentTaskStep;
 import top.knos.mySeek.task.repository.AgentTaskEventRepository;
 import top.knos.mySeek.task.repository.AgentTaskRepository;
 import top.knos.mySeek.task.repository.AgentTaskStepRepository;
+import top.knos.mySeek.task.runtime.AgentToolRegistry;
 import top.knos.mySeek.task.runtime.TaskEventService;
 import top.knos.mySeek.task.runtime.TaskExecutionService;
 import top.knos.mySeek.task.vo.TaskApprovalReq;
@@ -27,6 +28,7 @@ public class TaskService {
     private final AgentTaskEventRepository eventRepository;
     private final TaskEventService eventService;
     private final TaskExecutionService executionService;
+    private final AgentToolRegistry toolRegistry;
 
     public TaskVo create(Long userId, TaskCreateReq req) {
         if (req == null || req.getTitle() == null || req.getTitle().isBlank()
@@ -39,6 +41,7 @@ public class TaskService {
         task.setGoal(req.getGoal().trim());
         task.setConstraints(req.getConstraints());
         task.setModelCode(req.getModelCode());
+        task.setAgentCode(req.getAgentCode());
         task.setStatus(AgentTask.Status.CREATED);
         task.setCurrentStep(0);
         task.setMaxSteps(8);
@@ -47,6 +50,11 @@ public class TaskService {
         eventService.record(task.getId(), null, "task_created", "任务已创建", userId);
         executionService.planAsync(task.getId(), userId);
         return detail(userId, task.getId());
+    }
+
+    /** 任务中心可用工具列表，供前端展示规划能力边界（含外部 MCP 工具）。 */
+    public List<String> listTools() {
+        return toolRegistry.availableTools();
     }
 
     public Page<TaskVo> list(Long userId, int page, int size) {

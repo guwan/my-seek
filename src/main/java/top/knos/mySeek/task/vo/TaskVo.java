@@ -15,6 +15,7 @@ public class TaskVo {
     private String goal;
     private String constraints;
     private String modelCode;
+    private String agentCode;
     private AgentTask.Status status;
     private Integer currentStep;
     private Integer maxSteps;
@@ -84,6 +85,7 @@ public class TaskVo {
         vo.setGoal(task.getGoal());
         vo.setConstraints(task.getConstraints());
         vo.setModelCode(task.getModelCode());
+        vo.setAgentCode(task.getAgentCode());
         vo.setStatus(task.getStatus());
         vo.setCurrentStep(task.getCurrentStep());
         vo.setMaxSteps(task.getMaxSteps());

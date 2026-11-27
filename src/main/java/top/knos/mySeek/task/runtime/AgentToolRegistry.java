@@ -27,24 +27,51 @@ public class AgentToolRegistry {
     private final KnowledgeBaseService knowledgeBaseService;
     private final WritingService writingService;
     private final WebSearchService webSearchService;
+    private final McpToolBridge mcpToolBridge;
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
     public AgentToolRegistry(KnowledgeBaseService knowledgeBaseService,
                              WritingService writingService,
-                             WebSearchService webSearchService) {
+                             WebSearchService webSearchService,
+                             McpToolBridge mcpToolBridge) {
         this.knowledgeBaseService = knowledgeBaseService;
         this.writingService = writingService;
         this.webSearchService = webSearchService;
+        this.mcpToolBridge = mcpToolBridge;
     }
 
-    /** 写操作默认需要用户批准，查询类工具自动执行。 */
+    /** 写操作与所有 MCP 外部工具默认需要用户批准，查询类内置工具自动执行。 */
     public boolean isSensitive(String tool) {
-        return "novel_write_draft".equals(tool);
+        return "novel_write_draft".equals(tool) || mcpToolBridge.isSensitive(tool);
+    }
+
+    /** 规划阶段可用的工具名：内置白名单 + 已发现的 MCP 工具。 */
+    public List<String> availableTools() {
+        List<String> tools = new java.util.ArrayList<>(ALLOWED_TOOLS);
+        tools.addAll(mcpToolBridge.toolNames());
+        return tools;
+    }
+
+    /** 规划阶段给模型看的工具目录，含 MCP 工具的描述与参数 schema。 */
+    public String catalog() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("- model：基于任务目标与已有结果直接推理输出，参数 {\"prompt\":\"补充提示\"}\n");
+        sb.append("- knowledge_search：知识库问答，参数 {\"query\":\"问题\",\"topK\":5}\n");
+        sb.append("- knowledge_list：列出当前用户已完成的知识库文档，参数 {}\n");
+        sb.append("- novel_read：查询写作作品，参数 {\"keyword\":\"标题关键字\"}\n");
+        sb.append("- novel_write_draft：保存作品草稿（需批准），参数 {\"id\":\"作品id\",\"title\":\"标题\",\"content\":\"正文\"}\n");
+        sb.append("- web_search：联网搜索，参数 {\"query\":\"搜索词\"}\n");
+        String mcp = mcpToolBridge.describeTools();
+        if (mcp != null && !mcp.isBlank()) sb.append("外部 MCP 工具（调用前需用户批准）：\n").append(mcp);
+        return sb.toString();
     }
 
     public String execute(String tool, Long userId, String inputJson, String model) {
         if (tool == null || tool.isBlank() || tool.equals("model")) {
             throw new IllegalArgumentException("该步骤不需要工具");
+        }
+        if (mcpToolBridge.isMcpTool(tool)) {
+            return mcpToolBridge.execute(tool, inputJson);
         }
         if (!ALLOWED_TOOLS.contains(tool)) {
             throw new IllegalArgumentException("工具不在白名单中: " + tool);

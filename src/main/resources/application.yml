@@ -77,6 +77,20 @@ spring:
         prefix: "doc:"
         # 开启后启动期会连接 Redis 并创建向量索引（需要 Redis Stack 的 RediSearch 模块）
         initialize-schema: ${VECTOR_STORE_INITIALIZE_SCHEMA:true}
+        # MCP 客户端：AI 任务中心可调用外部 MCP 服务器工具。默认关闭；
+        # 需要时通过环境变量 MCP_ENABLED=true 并在配置中声明 sse/stdio 连接。
+        # 示例（SSE）：
+        #   sse:
+        #     connections:
+        #       weather:
+        #         url: http://localhost:3001/sse
+        mcp:
+        client:
+          enabled: ${MCP_ENABLED:false}
+          type: SYNC
+          toolcallback:
+            enabled: ${MCP_TOOLCALLBACK_ENABLED:true}
+
 
 # 豆包（字节跳动）配置
 doubao:

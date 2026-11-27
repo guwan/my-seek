@@ -47,6 +47,9 @@ dependencies {
 	// Spring AI Vector Store - 使用 Redis 作为向量数据库
 	implementation("org.springframework.ai:spring-ai-starter-vector-store-redis")
 
+	// MCP 客户端：让 AI 任务中心可连接外部 MCP 工具服务器
+	implementation("org.springframework.ai:spring-ai-starter-mcp-client")
+
 	// 文档解析
 	implementation("org.apache.tika:tika-core:4.2.0")
 	implementation("org.apache.tika:tika-parsers-standard-package:4.2.0")
